@@ -12,7 +12,7 @@ tar -xJf "$DEPS/dl/ffmpeg-9.0.2.tar.xz" -C "$SRC" --strip-components=1
 cd "$SRC"
 ./configure --prefix=/anonymiseur-ffmpeg --arch=x86_64 --target-os=mingw32 --cc=gcc \
   --disable-everything --disable-autodetect --disable-doc --disable-debug --disable-network --disable-shared --enable-static \
-  --disable-ffplay --enable-ffmpeg --enable-ffprobe --enable-zlib --extra-ldflags="-static" \
+  --disable-ffplay --enable-ffmpeg --enable-ffprobe --enable-zlib --disable-x86asm --extra-ldflags="-static" \
   --enable-protocol=file,pipe \
   --enable-demuxer=mov,matroska,avi,mp3,wav,flac,ogg,aiff,aac,asf,flv,mpegps,mpegts,h264,hevc,amr,caf \
   --enable-muxer=mp4,mov,ipod,3gp,3g2,matroska,webm,avi,mp3,wav,flac,ogg,opus,aiff,adts,asf,flv,mpeg1system,mpeg2video,mpegts,null \
