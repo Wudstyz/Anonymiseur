@@ -139,7 +139,7 @@ if not args.http:
     opts = server.parse_options(urllib.parse.quote(json.dumps({"neutral": True, "content": {"on": True}})))
     rep, status = server.process_folder(src, opts)
     dest = rep.get("saved_path", "")
-    tree = sorted(os.path.relpath(os.path.join(r, f), dest) for r, _d, fs in os.walk(dest) for f in fs) if dest else []
+    tree = sorted(os.path.relpath(os.path.join(r, f), dest).replace(os.sep, "/") for r, _d, fs in os.walk(dest) for f in fs) if dest else []
     check(status == 200 and tree == ["docs/contenu.docx", "docs/lettre.txt", "photos/photo.jpg", "schema.drawio"], f"dossier : arborescence inattendue {tree}")
     check(rep["totals"]["skipped"] == 1 and rep["totals"]["after"] == 0, f"dossier : totaux inattendus {rep['totals']}")
     check(dest and abs(os.path.getmtime(os.path.join(dest, "photos", "photo.jpg")) - 946684800) < 2, "dossier : date du fichier non neutralisée")
@@ -148,6 +148,9 @@ if not args.http:
 
 print()
 print(f"{counts['ok']} vérifications réussies, {counts['ko']} échec(s), sur {len(FILES)} fichiers × {len(COMBOS)} combinaisons")
+absents = [f for f in OPTIONAL if f not in FILES]
+if absents:
+    print("fichiers optionnels absents (non testés) :", ", ".join(absents))
 if len(FILES) < len(REQUIRED):
     print("⚠ des fichiers obligatoires manquent")
 for m in failures:
