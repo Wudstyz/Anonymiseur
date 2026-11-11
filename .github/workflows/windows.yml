@@ -1,0 +1,59 @@
+name: Windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, windows]
+    paths: ["src/**", "windows/**", "tests/**", "assets/**", ".github/workflows/windows.yml", "LICENSE", "THIRD_PARTY_NOTICES.md"]
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Outils de construction (Inno Setup) et FFmpeg complet (seulement pour fabriquer des fichiers de test)
+        shell: pwsh
+        run: choco install innosetup ffmpeg -y --no-progress
+
+      - name: Construire l'installateur
+        shell: pwsh
+        run: ./windows/build_windows.ps1 -Version "1.1"
+
+      - name: Fabriquer les fichiers de test (avec le Python embarqué)
+        shell: pwsh
+        run: |
+          $env:PYTHONUTF8 = "1"
+          $env:FFMPEG_FULL = (Get-Command ffmpeg.exe).Source
+          $app = "$PWD\dist\Anonymiseur"
+          $env:PATH = "$app\bin;$env:SystemRoot\System32;$env:SystemRoot"
+          & "$app\python\python.exe" tests\make_fixtures.py "$env:RUNNER_TEMP\fixtures"
+
+      - name: Tests du moteur embarqué (sans Python ni outils installés sur la machine)
+        shell: pwsh
+        run: |
+          $env:PYTHONUTF8 = "1"
+          $app = "$PWD\dist\Anonymiseur"
+          $env:PATH = "$app\bin;$env:SystemRoot\System32;$env:SystemRoot"
+          & "$app\python\python.exe" tests\run_tests.py --dir "$env:RUNNER_TEMP\fixtures"
+          if ($LASTEXITCODE -ne 0) { throw "tests en échec" }
+
+      - name: Installer, lancer, tester, désinstaller
+        shell: pwsh
+        run: ./windows/test_installer.ps1 -Fixtures "$env:RUNNER_TEMP\fixtures"
+
+      - name: Conserver l'installateur et la capture
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: anonymiseur-windows
+          path: |
+            dist/Anonymiseur-*-x64-setup.exe
+            dist/Anonymiseur-*-x64-setup.exe.sha256
+            dist/capture-windows.png
+            ${{ runner.temp }}/e2e
+          if-no-files-found: warn

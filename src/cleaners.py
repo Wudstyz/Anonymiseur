@@ -27,6 +27,20 @@ ZIP_DOC_EXT = {".docx", ".xlsx", ".pptx", ".docm", ".xlsm", ".pptm", ".dotx", ".
                ".odt", ".ods", ".odp", ".odg", ".epub"}
 
 
+_IS_WIN = os.name == "nt"
+_NOWIN = 0x08000000 if _IS_WIN else 0      # CREATE_NO_WINDOW : pas de fenêtre console qui clignote sous Windows
+
+
+def _run(cmd, **kw):
+    """subprocess.run : texte lu en UTF-8 quel que soit le réglage régional, et sans fenêtre console sous Windows."""
+    if kw.pop("text", False) or kw.pop("universal_newlines", False):
+        kw.setdefault("encoding", "utf-8")
+        kw.setdefault("errors", "replace")
+    if _NOWIN:
+        kw.setdefault("creationflags", _NOWIN)
+    return subprocess.run(cmd, **kw)
+
+
 _tl = threading.local()
 
 
@@ -449,7 +463,7 @@ def clean_media(data, ext):
         codec = ""
         fp = shutil.which("ffprobe")
         if fp:
-            codec = subprocess.run([fp, "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=codec_name",
+            codec = _run([fp, "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=codec_name",
                                     "-of", "csv=p=0", src], capture_output=True, text=True).stdout.strip()
         bsf = {"h264": "filter_units=remove_types=6", "hevc": "filter_units=remove_types=39|40"}.get(codec)
         cmd = [ff, "-y", "-loglevel", "error", "-i", src,
@@ -466,12 +480,12 @@ def clean_media(data, ext):
         duration = 0.0
         if fp:
             try:
-                duration = float(subprocess.run([fp, "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", src],
+                duration = float(_run([fp, "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", src],
                                                 capture_output=True, text=True).stdout.strip() or 0)
             except ValueError:
                 pass
         proc = subprocess.Popen(cmd[:1] + ["-progress", "pipe:1", "-nostats"] + cmd[1:], stdout=subprocess.PIPE,
-                                stderr=subprocess.STDOUT, text=True)
+                                stderr=subprocess.STDOUT, encoding="utf-8", errors="replace", creationflags=_NOWIN)
         tail = []
         for line in proc.stdout:
             if line.startswith("out_time_us=") and duration:
@@ -506,13 +520,13 @@ def clean_with_exiftool(data, ext):
         p = os.path.join(d, "f" + ext)
         with open(p, "wb") as f:
             f.write(data)
-        kind = subprocess.run([et, "-s3", "-FileType", p], capture_output=True, text=True).stdout.strip()
+        kind = _run([et, "-s3", "-FileType", p], capture_output=True, text=True).stdout.strip()
         if not kind:
             return None          # exiftool ne reconnaît pas ce format
         # -all= ne peut pas vider l'IFD0 des formats basés sur TIFF (TIFF, DNG, RAW) : on y efface les champs à la main.
-        subprocess.run([et, "-m", "-all=", *_ET_EXTRA, "-overwrite_original", "-q", "-q", p],
+        _run([et, "-m", "-all=", *_ET_EXTRA, "-overwrite_original", "-q", "-q", p],
                        capture_output=True, text=True)
-        chk = subprocess.run([et, "-j", "-a", "-G0:1", p], capture_output=True, text=True)
+        chk = _run([et, "-j", "-a", "-G0:1", p], capture_output=True, text=True)
         try:
             import json as _json
             tags = _json.loads(chk.stdout)[0]
@@ -541,11 +555,28 @@ def _sips_to_png(data):
         src, dst = os.path.join(d, "in.heic"), os.path.join(d, "out.png")
         with open(src, "wb") as f:
             f.write(data)
-        r = subprocess.run([sips, "-s", "format", "png", src, "--out", dst], capture_output=True, text=True)
+        r = _run([sips, "-s", "format", "png", src, "--out", dst], capture_output=True, text=True)
         if r.returncode != 0 or not os.path.exists(dst):
             raise RuntimeError("Conversion HEIC impossible : " + r.stderr.strip()[-200:])
         with open(dst, "rb") as f:
             return f.read()
+
+
+def _heif_to_png(data):
+    """Décode un HEIC/HEIF en PNG : outil du système (sips) sur Mac, sinon la bibliothèque pillow-heif."""
+    if shutil.which("sips") and not os.environ.get("ANONYMISEUR_NO_SIPS"):
+        return _sips_to_png(data)
+    try:
+        import pillow_heif
+    except ImportError:
+        raise RuntimeError("Lecture du HEIC impossible : composant pillow-heif absent.")
+    from PIL import Image
+    pillow_heif.register_heif_opener()
+    im = Image.open(io.BytesIO(data))
+    im.load()
+    buf = io.BytesIO()
+    im.save(buf, "PNG", icc_profile=im.info.get("icc_profile"))
+    return buf.getvalue()
 
 
 def clean_image_strong(data, filename=""):
@@ -557,7 +588,7 @@ def clean_image_strong(data, filename=""):
     ext = os.path.splitext(filename)[1].lower()
     target, converted = None, False
     if data[4:8] == b"ftyp" and data[8:12] in _HEIF_BRANDS:
-        data, target, converted = _sips_to_png(data), "JPEG", True
+        data, target, converted = _heif_to_png(data), "JPEG", True
     im = Image.open(io.BytesIO(data))
     fmt = im.format
     if fmt == "TIFF" and ext in (".tif", ".tiff"):
@@ -793,7 +824,7 @@ def inspect(data, filename):
         p = os.path.join(d, "f" + ext)
         with open(p, "wb") as f:
             f.write(data)
-        r = subprocess.run([et, "-j", "-a", "-u", "-G1", "-m", p], capture_output=True, text=True)
+        r = _run([et, "-j", "-a", "-u", "-G1", "-m", p], capture_output=True, text=True)
     try:
         import json as _json
         raw = _json.loads(r.stdout)[0]
@@ -1140,6 +1171,8 @@ def _make_redactor(content):
 
 
 def _helper_path():
+    if os.environ.get("ANONYMISEUR_NO_PDFFLAT"):
+        return None
     for c in (os.environ.get("PDFFLAT", ""), os.path.join(os.path.dirname(os.path.abspath(__file__)), "pdfflat")):
         if c and os.path.isfile(c) and os.access(c, os.X_OK):
             return c
@@ -1151,7 +1184,7 @@ def flatten_pdf(data, literals=(), dpi=150):
     Renvoie (octets, {texte: nombre d'occurrences noircies}) ou None si l'outil est absent."""
     exe = _helper_path()
     if not exe:
-        return None
+        return _flatten_pdf_pdfium(data, literals, dpi)
     import json as _json
     with tempfile.TemporaryDirectory() as d:
         src, dst, tf = (os.path.join(d, n) for n in ("in.pdf", "out.pdf", "terms.json"))
@@ -1159,7 +1192,7 @@ def flatten_pdf(data, literals=(), dpi=150):
             f.write(data)
         with open(tf, "w", encoding="utf-8") as f:
             _json.dump(list(literals), f)
-        r = subprocess.run([exe, src, dst, str(dpi), tf], capture_output=True, text=True)
+        r = _run([exe, src, dst, str(dpi), tf], capture_output=True, text=True)
         if r.returncode != 0 or not os.path.exists(dst):
             return None
         with open(dst, "rb") as f:
@@ -1420,7 +1453,7 @@ def _set_media(data, ext, f):
             lat, lon = f["gps"]
             cmd += ["-metadata", f"location={lat:+08.4f}{lon:+09.4f}/"]
         cmd.append(dst)
-        r = subprocess.run(cmd, capture_output=True, text=True)
+        r = _run(cmd, capture_output=True, text=True)
         if r.returncode != 0:
             return None
         with open(dst, "rb") as fh:
@@ -1458,7 +1491,7 @@ def _set_exif(data, ext, f):
         p = os.path.join(d, "f" + ext)
         with open(p, "wb") as fh:
             fh.write(data)
-        r = subprocess.run([et, "-m", "-overwrite_original", "-q", "-q", *a, p], capture_output=True, text=True)
+        r = _run([et, "-m", "-overwrite_original", "-q", "-q", *a, p], capture_output=True, text=True)
         if r.returncode != 0:
             return None
         with open(p, "rb") as fh:
@@ -1990,3 +2023,59 @@ def inspect_text_meta(data, ext):
         for m in _HTML_COMMENT.finditer(text):
             items.append({"group": "HTML", "tag": "Generator", "value": re.sub(r"\s+", " ", m.group(0)[4:-3]).strip()[:140]})
     return {"items": items, "technical": 0, "all": [(i["group"], i["tag"], i["value"]) for i in items]}
+
+
+def _flatten_pdf_pdfium(data, literals, dpi):
+    """Même résultat que l'outil Swift de Mac, avec pypdfium2 (Windows) : pages redessinées, passages noircis."""
+    try:
+        import pypdfium2 as pdfium
+    except ImportError:
+        return None
+    from PIL import ImageDraw
+    pdf = pdfium.PdfDocument(data)
+    scale = dpi / 72.0
+    wanted = [(t, re.sub(r"\s+", "", t).lower()) for t in literals if t.strip()]
+    counts, pages = {}, []
+    for i in range(len(pdf)):
+        page = pdf[i]
+        _w, height = page.get_size()
+        img = page.render(scale=scale).to_pil().convert("RGB")
+        if wanted and page.get_rotation() == 0:
+            tp = page.get_textpage()
+            n = tp.count_chars()
+            text = tp.get_text_range(0, n) if n else ""
+            compact, idx_map = [], []
+            for k, ch in enumerate(text):          # recherche sans espaces ni retours à la ligne
+                if not ch.isspace():
+                    compact.append(ch.lower())
+                    idx_map.append(k)
+            cs = "".join(compact)
+            draw = ImageDraw.Draw(img)
+            for term, needle in wanted:
+                start = 0
+                while needle:
+                    pos = cs.find(needle, start)
+                    if pos < 0:
+                        break
+                    lines = []
+                    for k in range(pos, pos + len(needle)):
+                        l, b, r, t = tp.get_charbox(idx_map[k])
+                        if r <= l or t <= b:
+                            continue
+                        for j, (L, B, R, T) in enumerate(lines):
+                            if abs((B + T) / 2 - (b + t) / 2) < max(T - B, t - b) * 0.6:
+                                lines[j] = (min(L, l), min(B, b), max(R, r), max(T, t))
+                                break
+                        else:
+                            lines.append((l, b, r, t))
+                    for L, B, R, T in lines:
+                        draw.rectangle([(L - 1.5) * scale, (height - T - 1.5) * scale, (R + 1.5) * scale, (height - B + 1.5) * scale],
+                                       fill=(0, 0, 0))
+                    counts[term] = counts.get(term, 0) + 1
+                    start = pos + max(len(needle), 1)
+        pages.append(img)
+    if not pages:
+        return None
+    buf = io.BytesIO()
+    pages[0].save(buf, "PDF", save_all=True, append_images=pages[1:], resolution=dpi)
+    return buf.getvalue(), counts
