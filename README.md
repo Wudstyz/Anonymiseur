@@ -64,6 +64,8 @@ Les fichiers de code, de texte et les polices ne contiennent pas de métadonnée
 | **Contenu masqué** dans un document Word. | **Vos propres métadonnées** à la place des originales. |
 | ![Dossier](docs/screenshots/07-dossier.png) | ![Résultat sur un document](docs/screenshots/04-resultat-document.png) |
 | **Un dossier entier**, fichier par fichier. | Un **nom d'auteur** resté dans le texte est signalé. |
+| ![Sous Windows](docs/screenshots/08-windows.png) | |
+| **Sous Windows** : capture automatique de l'app installée (Edge), prise sur les serveurs de GitHub. | |
 
 *Toutes les données visibles sont fictives (voir `examples/`). Captures prises sur Mac ; l'interface est la même sous Windows.*
 

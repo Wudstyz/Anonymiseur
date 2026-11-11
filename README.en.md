@@ -64,6 +64,8 @@ Code, text files and fonts carry no personal metadata: they are copied as-is (in
 | **Content masked** in a Word document. | **Your own metadata** in place of the originals. |
 | ![Folder](docs/screenshots/07-dossier.png) | ![Result on a document](docs/screenshots/04-resultat-document.png) |
 | **A whole folder**, file by file. | An **author's name** left in the text is flagged. |
+| ![On Windows](docs/screenshots/08-windows.png) | |
+| **On Windows**: automatic screenshot of the installed app (Edge), taken on GitHub's servers. | |
 
 *All the data shown is fictitious (see `examples/`). Screenshots taken on a Mac; the interface is the same on Windows.*
 
