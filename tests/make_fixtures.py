@@ -57,6 +57,18 @@ if shutil.which("sips"):
     if os.path.exists(P("photo.heic")):
         made.append("photo.heic")
 
+if not os.path.exists(P("photo.heic")):                    # sans sips (Windows) : pillow-heif sait écrire du HEIC
+    try:
+        import pillow_heif
+        pillow_heif.register_heif_opener()
+        Image.open(P("photo.jpg")).convert("RGB").save(P("photo.heic"), exif=ex.tobytes())
+        made.append("photo.heic")
+    except Exception:  # noqa: BLE001
+        data = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "photo.heic")   # HEIC fictif fourni avec le dépôt
+        if os.path.exists(data):
+            shutil.copy(data, P("photo.heic"))
+            made.append("photo.heic")
+
 # ── PDF ──────────────────────────────────────────────────────────────────────
 from pypdf import PdfWriter  # noqa: E402
 
@@ -73,6 +85,23 @@ if shutil.which("cupsfilter"):
     r = subprocess.run(["cupsfilter", "-m", "application/pdf", P("lettre.txt")], capture_output=True)
     if r.stdout[:5] == b"%PDF-":
         put("lettre.pdf", r.stdout)
+
+if not os.path.exists(P("lettre.pdf")):                    # sans cupsfilter (Windows) : PDF écrit à la main, texte extractible
+    def esc(t):
+        return t.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+    body = "BT /F1 9 Tf 36 770 Td 11 TL " + " ".join("(%s) Tj T*" % esc(l) for l in letter.splitlines()) + " ET"
+    body = body.encode("cp1252")
+    objs = [b"<< /Type /Catalog /Pages 2 0 R >>", b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+            b"<< /Length %d >>\nstream\n" % len(body) + body + b"\nendstream",
+            b"<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>"]
+    pdf = b"%PDF-1.4\n"; offs = []
+    for i, o in enumerate(objs, 1):
+        offs.append(len(pdf)); pdf += b"%d 0 obj\n" % i + o + b"\nendobj\n"
+    x = len(pdf)
+    pdf += b"xref\n0 %d\n0000000000 65535 f \n" % (len(objs) + 1) + b"".join(b"%010d 00000 n \n" % o for o in offs)
+    pdf += b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (len(objs) + 1, x)
+    put("lettre.pdf", pdf)
 
 # PDF « riche » : annotation signée + photo JPEG (avec EXIF/GPS) embarquée, écrit à la main
 jpg = open(P("photo.jpg"), "rb").read()

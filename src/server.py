@@ -2,6 +2,7 @@
 import json
 import os
 import secrets
+import subprocess
 import sys
 import threading
 import time
@@ -27,6 +28,9 @@ def watchdog(srv):
         if last_ping[0] and time.time() - last_ping[0] > 20:
             srv.shutdown()
             return
+        if not last_ping[0] and time.time() - START > 120:       # la fenêtre ne s'est jamais ouverte
+            srv.shutdown()
+            return
 
 
 TOKEN = os.environ.get("TOKEN", "")          # fourni par l'app native ; protège les routes qui lisent le disque
@@ -36,6 +40,107 @@ LOCK = threading.Lock()
 NEUTRAL_TS = 946684800                         # 1er janvier 2000, 00:00 UTC
 MAX_FILES = 5000
 SKIP_NAMES = {".DS_Store", "Thumbs.db", "desktop.ini"}
+
+
+WINAPP = bool(os.environ.get("WINAPP"))        # lancé par le lanceur Windows : l'interface s'ouvre dans une fenêtre Edge
+PENDING = []                                   # fichiers à mettre en file d'attente (« Envoyer vers », second lancement)
+START = time.time()
+
+_DLG = {
+    "files": "import tkinter as t, tkinter.filedialog as f, json; r=t.Tk(); r.withdraw(); r.attributes('-topmost', True); "
+             "print(json.dumps(list(f.askopenfilenames(title='Choisir des fichiers à anonymiser'))))",
+    "folder": "import tkinter as t, tkinter.filedialog as f, json; r=t.Tk(); r.withdraw(); r.attributes('-topmost', True); "
+              "d=f.askdirectory(title='Choisir un dossier à anonymiser'); print(json.dumps([d] if d else []))",
+    "target": "import tkinter as t, tkinter.filedialog as f, json; r=t.Tk(); r.withdraw(); r.attributes('-topmost', True); "
+              "d=f.askdirectory(title='Dossier où enregistrer les fichiers nettoyés'); print(json.dumps([d] if d else []))",
+    "savefile": "import tkinter as t, tkinter.filedialog as f, json, sys; r=t.Tk(); r.withdraw(); r.attributes('-topmost', True); "
+                "d=f.asksaveasfilename(title='Enregistrer', initialfile=sys.argv[1]); print(json.dumps([d] if d else []))",
+}
+
+
+def ask_dialog(kind, *args):
+    """Boîte de dialogue Windows (tkinter, dans un processus à part). Variable ANONYMISEUR_TEST_DIALOG : réponse imposée (tests)."""
+    forced = os.environ.get("ANONYMISEUR_TEST_DIALOG")
+    if forced:
+        return json.loads(forced)
+    exe = os.path.join(os.path.dirname(sys.executable), "python.exe")
+    if not os.path.exists(exe):
+        exe = sys.executable
+    r = subprocess.run([exe, "-c", _DLG[kind], *args], capture_output=True, text=True, encoding="utf-8",
+                       creationflags=0x08000000 if os.name == "nt" else 0)
+    try:
+        return json.loads(r.stdout.strip().splitlines()[-1])
+    except (ValueError, IndexError):
+        return []
+
+
+def recycle(paths):
+    """Met des fichiers ou dossiers à la corbeille de Windows (récupérables). Renvoie le nombre déplacé."""
+    import ctypes
+    from ctypes import wintypes
+
+    class SHFILEOPSTRUCT(ctypes.Structure):
+        _fields_ = [("hwnd", wintypes.HWND), ("wFunc", wintypes.UINT), ("pFrom", wintypes.LPCWSTR), ("pTo", wintypes.LPCWSTR),
+                    ("fFlags", ctypes.c_ushort), ("fAnyOperationsAborted", wintypes.BOOL), ("hNameMappings", ctypes.c_void_p),
+                    ("lpszProgressTitle", wintypes.LPCWSTR)]
+    n = 0
+    for p in paths:
+        op = SHFILEOPSTRUCT(None, 3, os.path.abspath(p) + "\0", None, 0x0040 | 0x0010 | 0x0004 | 0x0400, False, None, None)  # DELETE ; ALLOWUNDO|NOCONFIRMATION|SILENT|NOERRORUI
+        if ctypes.windll.shell32.SHFileOperationW(ctypes.byref(op)) == 0 and not op.fAnyOperationsAborted:
+            n += 1
+    return n
+
+
+def confirm(text, title="Anonymiseur"):
+    if os.environ.get("ANONYMISEUR_ASSUME_YES"):
+        return True
+    import ctypes
+    return ctypes.windll.user32.MessageBoxW(0, text, title, 0x4 | 0x20 | 0x40000) == 6   # Oui/Non, point d'interrogation, au premier plan
+
+
+def native_message(msg):
+    """Équivalent, sous Windows, des messages que la fenêtre Swift traite sur Mac."""
+    t = msg.get("type")
+    if t == "pick":
+        return {"paths": ask_dialog("files")}
+    if t == "pickfolder":
+        return {"paths": ask_dialog("folder")}
+    if t == "reveal":
+        try:
+            subprocess.Popen(["explorer.exe", "/select," + os.path.normpath(msg.get("path", ""))])
+        except OSError:
+            pass
+        return {}
+    if t == "saveAll":
+        folder = (ask_dialog("target") or [""])[0]
+        saved = 0
+        for it in msg.get("items", []):
+            with LOCK:
+                item = RESULTS.get(it.get("id"))
+            if folder and item:
+                dest = write_result(folder, item[0], item[1], bool(msg.get("neutral")))
+                saved += 1
+        if folder and saved:
+            try:
+                subprocess.Popen(["explorer.exe", os.path.normpath(folder)])
+            except OSError:
+                pass
+        return {"saved": saved}
+    if t == "trash":
+        pairs = [(i["src"], i["copy"]) for i in msg.get("items", []) if i.get("src") != i.get("copy") and os.path.exists(i.get("src", "")) and os.path.exists(i.get("copy", ""))]
+        if not pairs:
+            return {"trashed": 0}
+        names = "\n".join("• " + os.path.basename(a) for a, _b in pairs[:8]) + ("\n…" if len(pairs) > 8 else "")
+        ok = confirm(f"Mettre {len(pairs)} original(aux) à la corbeille ?\n\nLes copies anonymisées sont enregistrées. "
+                     f"Les originaux contiennent encore leurs métadonnées :\n{names}\n\nIls restent récupérables dans la corbeille.")
+        return {"trashed": recycle([a for a, _b in pairs]) if ok else 0}
+    if t == "saveText":
+        dest = (ask_dialog("savefile", msg.get("name", "rapport.txt")) or [""])[0]
+        if dest:
+            with open(dest, "w", encoding="utf-8") as f:
+                f.write(msg.get("text", ""))
+        return {"saved": bool(dest)}
+    return {}
 
 
 def parse_options(header):
@@ -143,6 +248,19 @@ def set_neutral_date(path):
         os.utime(path, (NEUTRAL_TS, NEUTRAL_TS))
     except OSError:
         pass
+    if os.name == "nt":                      # sous Windows, utime ne change pas la date de création
+        try:
+            import ctypes
+            from ctypes import wintypes
+            k32 = ctypes.windll.kernel32
+            k32.CreateFileW.restype = wintypes.HANDLE
+            h = k32.CreateFileW(path, 0x100, 7, None, 3, 0x02000000, None)   # écriture d'attributs ; dossiers acceptés
+            if h not in (None, wintypes.HANDLE(-1).value):
+                ft = ctypes.c_ulonglong((NEUTRAL_TS + 11644473600) * 10_000_000)
+                k32.SetFileTime(h, ctypes.byref(ft), ctypes.byref(ft), ctypes.byref(ft))
+                k32.CloseHandle(h)
+        except Exception:  # noqa: BLE001
+            pass
 
 
 def write_result(folder, filename, out, neutral):
@@ -169,7 +287,8 @@ def process_folder(src, o):
         return {"removed": [], "notes": [], "error": "Le dossier ne contient aucun fichier."}, 422
     if len(files) > MAX_FILES:
         return {"removed": [], "notes": [], "error": f"Trop de fichiers ({len(files)}, maximum {MAX_FILES})."}, 422
-    dest_root = unique_path(os.path.dirname(src), os.path.basename(src.rstrip("/")) + " (anonymisé)")
+    src = os.path.normpath(src)
+    dest_root = unique_path(os.path.dirname(src), os.path.basename(src) + " (anonymisé)")
     os.makedirs(dest_root)
     fo = dict(o, rename=False, job="")             # les noms sont conservés pour garder l'arborescence
     rows, tot = [], {"files": len(files), "ok": 0, "skipped": 0, "passthrough": 0, "partial": 0, "before": 0, "after": 0, "leaks": 0, "findings": 0}
@@ -212,7 +331,7 @@ def process_folder(src, o):
     notes = ["Noms des fichiers et des dossiers conservés pour garder l'arborescence."]
     if tot["skipped"]:
         notes.append(f"{tot['skipped']} fichier(s) non traités (format non géré ou erreur) : ils n'ont PAS été copiés.")
-    rep = {"folder": True, "name": os.path.basename(dest_root), "source_name": os.path.basename(src.rstrip("/")),
+    rep = {"folder": True, "name": os.path.basename(dest_root), "source_name": os.path.basename(os.path.normpath(src)),
            "saved_path": dest_root, "files": rows, "totals": tot, "removed": [], "notes": notes,
            "size_before": size_b, "size_after": size_a, "meta_kept": not o["meta"]}
     _job(job, 100, "Terminé")
@@ -286,6 +405,20 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(204)
             self.end_headers()
             return
+        if url.path == "/pending":
+            q = urllib.parse.parse_qs(url.query)
+            if not self._authorized((q.get("token") or [""])[0]):
+                return
+            with LOCK:
+                items = PENDING[:]
+                PENDING.clear()
+            body = json.dumps({"paths": items}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if url.path == "/progress":
             q = urllib.parse.parse_qs(url.query)
             with LOCK:
@@ -321,6 +454,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         with open(os.path.join(HERE, "index.html"), "rb") as f:
             body = f.read()
+        if WINAPP:      # fenêtre Windows : le jeton de sécurité et le mode « application » sont injectés dans la page
+            boot = ("<script>window.NATIVE=true;window.WINAPP=true;window.TOKEN=%s;</script>" % json.dumps(TOKEN)).encode()
+            body = body.replace(b"<!--BOOT-->", boot, 1)
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
@@ -329,7 +465,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = self.path.split("?")[0]
-        if path not in ("/clean", "/clean-path", "/forget", "/stat") or not self._local_only():
+        if path not in ("/clean", "/clean-path", "/forget", "/stat", "/enqueue", "/native") or not self._local_only():
             self.send_error(404)
             return
         n = int(self.headers.get("Content-Length", 0))
@@ -347,11 +483,32 @@ class Handler(BaseHTTPRequestHandler):
                 self.end_headers()
             return
 
+        if path in ("/enqueue", "/native"):
+            if not self._authorized(self.headers.get("X-Token")) or (path == "/native" and not WINAPP):
+                return
+            try:
+                msg = json.loads(body.decode("utf-8") or "{}")
+            except ValueError:
+                msg = {}
+            if path == "/enqueue":
+                with LOCK:
+                    PENDING.extend(p for p in msg.get("paths", []) if isinstance(p, str))
+                out = {"ok": True}
+            else:
+                out = native_message(msg)
+            data = json.dumps(out).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+            return
+
         if path == "/stat":
             if not self._authorized(self.headers.get("X-Token")):
                 return
             src = urllib.parse.unquote(self.headers.get("X-Path", ""))
-            info = {"name": os.path.basename(src.rstrip("/"))}
+            info = {"name": os.path.basename(os.path.normpath(src))}
             try:
                 if os.path.isdir(src):
                     n = 0

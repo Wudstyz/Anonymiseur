@@ -10,7 +10,10 @@ components below, each under its own license.
 | Pillow | 13.0.0 | MIT-CMU (HPND) | Lecture/écriture d'images (mode « Images ré-encodées ») | https://github.com/python-pillow/Pillow |
 | pypdf | 7.0.1 | BSD-3-Clause | Lecture/écriture de PDF | https://github.com/py-pdf/pypdf |
 | ExifTool | 13.55 | Artistic License ou GPL v1+ (comme Perl) | Lecture des métadonnées de nombreux formats | https://exiftool.org |
-| FFmpeg (version minimale compilée par `scripts/build_ffmpeg.sh`) | 9.0.2 | LGPL v2.1 ou ultérieure | Recopie des flux audio/vidéo sans métadonnées | https://ffmpeg.org |
+| FFmpeg (version minimale compilée par `scripts/build_ffmpeg.sh` sur Mac, `windows/build_ffmpeg.sh` sur Windows) | 9.0.2 | LGPL v2.1 ou ultérieure | Recopie des flux audio/vidéo sans métadonnées | https://ffmpeg.org |
+| pypdfium2 (Windows uniquement) | 5.15.2 | BSD-3-Clause ou Apache-2.0 ; PDFium : BSD-3-Clause | Redessine et noircit les PDF (sur Mac, c'est PDFKit) | https://github.com/pypdfium2-team/pypdfium2 |
+| ExifTool pour Windows (exécutable officiel) | 13.63 | Artistic License ou GPL v1+ (comme Perl) | Lecture des métadonnées | https://exiftool.org |
+| Inno Setup (Windows, outil de construction de l'installateur) | 6 | Licence Inno Setup | Fabrique `Anonymiseur-<version>-x64-setup.exe` ; son module de démarrage est inclus dans l'installateur | https://jrsoftware.org/isinfo.php |
 
 ## Détails
 
@@ -22,8 +25,10 @@ components below, each under its own license.
   « sans décodage » (`-c copy`). La configuration exacte est dans `scripts/build_ffmpeg.sh` ; elle compile l'archive officielle
   `ffmpeg-9.0.2.tar.xz` (SHA-256 `8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e`). Conformément à la
   LGPL, vous pouvez remplacer `ffmpeg` et `ffprobe` dans `Contents/Resources/bin/` par votre propre compilation.
-- **ExifTool** : copie fidèle du programme Perl et de ses modules (`Image::ExifTool`). L'application utilise le Perl fourni
-  par macOS (`/usr/bin/perl`).
+- **ExifTool** : sur Mac, copie fidèle du programme Perl et de ses modules (`Image::ExifTool`), exécutée avec le Perl fourni
+  par macOS (`/usr/bin/perl`) ; sur Windows, exécutable officiel d'ExifTool (version 64 bits), qui embarque son propre Perl.
+- **Windows** : la version Windows n'embarque **pas** pillow-heif (il contient x265, sous licence GPL, incompatible avec la
+  licence MIT du projet). Le HEIC y est nettoyé par ExifTool, sans décodage de l'image.
 - Les outils du système macOS `sips` (conversion HEIC) et `PDFKit` (via `pdfflat`, écrit pour ce projet) sont utilisés
   tels que fournis par le système.
 
