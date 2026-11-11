@@ -8,8 +8,8 @@ set -euo pipefail
 setopt nullglob
 cd "$(dirname "$0")"
 ROOT="$PWD"
-VERSION="1.0"
-BUILD_NUMBER="1"
+VERSION="1.1"
+BUILD_NUMBER="2"
 BUNDLE_ID="io.github.wudstyz.anonymiseur"
 
 # 1. Composants : téléchargés et vérifiés une seule fois (voir scripts/fetch_deps.sh).
@@ -43,6 +43,8 @@ rm -rf "$RES"/python/lib/tcl* "$RES"/python/lib/tk* "$RES"/python/lib/itcl* "$RE
 find "$RES/python/bin" -type f ! -name 'python3.13' -delete 2>/dev/null || true
 find "$RES/python/bin" -type l ! -name 'python3' ! -name 'python' -delete 2>/dev/null || true
 rm -rf "$PYLIB/site-packages/pip" "$PYLIB/site-packages"/pip-*
+# L'app Mac n'embarque ni pypdfium2 ni pillow-heif (réservés aux tests des chemins de repli Windows ; pillow-heif contient x265, sous licence GPL).
+rm -rf "$PYLIB/site-packages"/pypdfium2* "$PYLIB/site-packages"/pillow_heif* "$PYLIB/site-packages"/_pillow_heif*
 
 # 4. Outils : FFmpeg minimal et ExifTool (script Perl + ses modules ; Perl est fourni par macOS).
 cp .deps/ffmpeg/bin/ffmpeg .deps/ffmpeg/bin/ffprobe "$RES/bin/"
@@ -67,6 +69,11 @@ find "$RES" -name __pycache__ -type d -prune -exec rm -rf {} +
 "$RES/python/bin/python3" -m compileall -q -j0 -s "$RES" -p "/Applications/Anonymiseur.app/Contents/Resources" \
   "$RES/python/lib" "$RES/cleaners.py" "$RES/server.py"
 find "$RES" -name '.DS_Store' -delete
+
+# Garde-fou licence : aucune bibliothèque GPL ne doit se retrouver dans l'app.
+if find "$APP" \( -iname "*x265*" -o -iname "*x264*" -o -iname "libde265*" -o -iname "*heif*" \) | grep -q .; then
+  echo "✗ Une bibliothèque HEIC/x265 (GPL) s'est glissée dans l'app :" >&2; find "$APP" \( -iname "*x265*" -o -iname "*heif*" \) | head -3 >&2; exit 1
+fi
 
 # 6. macOS minimum réel = le plus exigeant parmi tous les binaires embarqués.
 MINOS="$(python3 - "$APP" <<'PY'

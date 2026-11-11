@@ -7,8 +7,8 @@
 **Strip the metadata from your files, and mask what they contain, without sending anything over the Internet.**
 
 [![MIT License](https://img.shields.io/badge/license-MIT-1f6f50)](LICENSE)
-![macOS](https://img.shields.io/badge/macOS-12%2B-1f6f50)
-![Apple Silicon](https://img.shields.io/badge/Apple%20Silicon-arm64-1f6f50)
+![macOS](https://img.shields.io/badge/macOS-12%2B%20(Apple%20Silicon)-1f6f50)
+![Windows](https://img.shields.io/badge/Windows-10%2F11%20(64--bit)-1f6f50)
 ![Standalone](https://img.shields.io/badge/nothing%20to%20install-%E2%9C%93-1f6f50)
 
 [Version française](README.md) · [Download](../../releases/latest)
@@ -65,26 +65,41 @@ Code, text files and fonts carry no personal metadata: they are copied as-is (in
 | ![Folder](docs/screenshots/07-dossier.png) | ![Result on a document](docs/screenshots/04-resultat-document.png) |
 | **A whole folder**, file by file. | An **author's name** left in the text is flagged. |
 
-*All the data shown is fictitious (see `examples/`).*
+*All the data shown is fictitious (see `examples/`). Screenshots taken on a Mac; the interface is the same on Windows.*
 
 ## Installation
 
-1. Download `Anonymiseur-1.0-arm64.dmg` from the [releases page](../../releases/latest).
+### Mac (Apple Silicon)
+
+1. Download `Anonymiseur-1.1-arm64.dmg` from the [releases page](../../releases/latest).
 2. Open the `.dmg` and **drag Anonymiseur into Applications**.
 3. **First launch**: the app is ad-hoc signed but **not notarized by Apple** (that requires a paid developer account), so
    macOS blocks it the first time:
    - **right-click** Anonymiseur → **Open** → **Open**; or
    - in Terminal: `xattr -dr com.apple.quarantine /Applications/Anonymiseur.app`
 
-**Nothing else to install**: Python, FFmpeg and ExifTool are bundled in the app (≈ 105 MB). No Internet connection is
-needed; the engine only listens on `127.0.0.1` and contacts no server.
+### Windows 10 / 11 (64-bit)
 
-You can verify the download with the SHA-256 shown on the release page: `shasum -a 256 Anonymiseur-1.0-arm64.dmg`
+1. Download `Anonymiseur-1.1-x64-setup.exe` from the [releases page](../../releases/latest) and run it.
+2. **SmartScreen warning**: the installer is **not signed** (a signing certificate is paid). Windows shows "Windows
+   protected your PC": click **More info**, then **Run anyway**.
+3. Follow the wizard (installing **without administrator rights** is possible: the wizard offers the choice). You can add a Desktop shortcut and the
+   **Send to → Anonymiseur** right-click entry. To uninstall: *Settings → Apps*.
+
+The app opens in an Edge window without an address bar (Edge ships with Windows; otherwise Chrome or your default browser
+is used). The installer is French.
+
+**Nothing else to install** on either system: Python, FFmpeg and ExifTool are bundled (≈ 105 MB on Mac, 42 MB installer on
+Windows). No Internet connection is needed; the engine only listens on `127.0.0.1` and contacts no server.
+
+You can verify a download with the SHA-256 shown on the release page (`shasum -a 256 <file>` on Mac,
+`Get-FileHash <file>` on Windows).
 
 ## Getting started
 
-1. **Drop** files or folders into the window (or click to pick them, or right-click → *Open With* → Anonymiseur in the
-   Finder). They appear under "Prêts à traiter" (ready to process).
+1. **Drop** files into the window (or click to pick them). On Mac you can also drop folders, or right-click → *Open With* →
+   Anonymiseur. On Windows use **"Choisir un dossier…"** (choose a folder), or right-click a file → **Send to →
+   Anonymiseur**. They appear under "Prêts à traiter" (ready to process).
 2. **Pick the actions** (buttons): erase metadata, random file name, mask content, etc.
 3. Click **"Lancer l'anonymisation"**, then **Télécharger** each result (or **Tout enregistrer…** to save them all).
 
@@ -94,19 +109,31 @@ Fictitious sample files are in [`examples/`](examples).
 
 **What was tested**
 
-- Apple Silicon Mac running **macOS 26.6.2**.
-- The app's engine was run **without Homebrew** (a `sandbox-exec` profile forbidding `/opt/homebrew` and `/usr/local`) and
-  passed the test suite (32 test files × 5 option combinations, i.e. 711 checks, `tests/run_tests.py`).
-- Opening files from the Finder (queued without automatic processing) was tried in the real window.
+- **Mac**: Apple Silicon running **macOS 26.6.2**. The app's engine was run **without Homebrew** (a `sandbox-exec` profile
+  forbidding `/opt/homebrew` and `/usr/local`) and passed the test suite (32 test files × 5 option combinations, i.e. 711
+  checks, `tests/run_tests.py`). Opening files from the Finder (queued without automatic processing) was tried in the real
+  window.
+- **Windows**: on GitHub's servers (`windows-latest`, see `.github/workflows/windows.yml`), on every change: installer
+  build, **711 checks** of the bundled engine, then a **silent install** (into a folder with spaces and an apostrophe), app
+  launch, **707 checks** against the installed app, tests of the recycle bin, "Tout enregistrer", the "Send to" queue,
+  creation dates and paths with accents, an Edge window opening, a screenshot of the interface, and a clean uninstall.
 
 **What was not tested**
 
-- Another Mac, or another macOS version: the **macOS 12** minimum is computed from the bundled binaries but was not
-  verified on a machine running macOS 12 to 15.
-- The first launch with Gatekeeper quarantine on a downloaded `.dmg`.
-- With the mouse, in the window: drag-and-drop, "Tout enregistrer…", "Original à la corbeille" (move to Trash), report
-  export.
-- **Intel Macs** are not supported (Apple Silicon only).
+- **Mac**: another Mac or another macOS version (the **macOS 12** minimum is computed from the bundled binaries but was not
+  verified on a machine running macOS 12 to 15); the first launch with Gatekeeper quarantine; with the mouse, in the window:
+  drag-and-drop, "Tout enregistrer…", "Original à la corbeille" (move to Trash), report export. **Intel Macs** are not
+  supported.
+- **Windows**: a real PC used by a person (the tests run without human clicks, and the file dialogs are simulated);
+  **Windows 10** and **Windows on ARM**; the SmartScreen prompt; a Windows without Edge.
+
+**Windows-specific limits**
+
+- The **"Images ré-encodées" (re-encoded images) mode is not available for HEIC** (the HEIC decoder contains GPL-licensed
+  code, incompatible with the project's MIT license). The app then applies standard cleaning, which does erase the metadata.
+- You cannot **drag a folder** into the window: use "Choisir un dossier…".
+- Files dragged into the window are handled as in a browser (they download). "À côté de l'original" (next to the original)
+  and "Original à la corbeille" need files chosen with the button, "Send to", or a folder.
 
 **Cleaning limits (please read)**
 
@@ -123,43 +150,51 @@ Fictitious sample files are in [`examples/`](examples).
 
 ## Build from source
 
-Requirements: an Apple Silicon Mac, the **Xcode command line tools** (`xcode-select --install`), and **ExifTool** for the
-build only (`brew install exiftool`). An Internet connection is needed the first time.
+**Mac**: an Apple Silicon Mac, the **Xcode command line tools** (`xcode-select --install`), and **ExifTool** for the build
+only (`brew install exiftool`). An Internet connection is needed the first time.
 
 ```bash
 ./build_app.sh            # downloads and verifies components (SHA-256), builds a minimal FFmpeg, builds dist/Anonymiseur.app
-./make_dmg.sh             # builds dist/Anonymiseur-1.0-arm64.dmg and its SHA-256 checksum
+./make_dmg.sh             # builds dist/Anonymiseur-1.1-arm64.dmg and its SHA-256 checksum
 ./build_app.sh --install  # alternative: build, then install into /Applications
 ```
 
-The script checks that no personal path from your machine ends up inside the app.
+**Windows**: the easiest way is to let **GitHub Actions** build it (*Actions* tab → *Windows*, the installer is the
+artifact). Locally: Windows 10/11, PowerShell 7, MSYS2 and Inno Setup 6, then `./windows/build_windows.ps1 -Version 1.1`
+(downloads and verifies the components, builds FFmpeg, assembles and builds `dist\Anonymiseur-1.1-x64-setup.exe`).
+
+The scripts check that no personal path from your machine ends up inside the app (Mac).
 
 ## Code layout
 
 ```
-src/cleaners.py     engine: cleaning, masking, inspection, leak check
-src/server.py       small local server (127.0.0.1) between the window and the engine
-src/index.html      interface (French, light theme)
-src/main.swift      macOS window (WebKit); launches the bundled engine
-src/pdfflat.swift   tool that redraws and blacks out PDFs (PDFKit)
-scripts/            verified download of components, FFmpeg build, screenshots
-tests/              fake test-file generator and test suite
+src/cleaners.py     engine: cleaning, masking, inspection, leak check (shared by Mac and Windows)
+src/server.py       small local server (127.0.0.1) between the window and the engine (shared)
+src/index.html      interface (French, light theme) (shared)
+src/main.swift      Mac: macOS window (WebKit); launches the bundled engine
+src/pdfflat.swift   Mac: tool that redraws and blacks out PDFs (PDFKit)
+windows/            Windows: launcher (Edge window), build, FFmpeg, Inno Setup installer, end-to-end tests
+scripts/            Mac: verified download of components, FFmpeg build, screenshots
+tests/              fake test-file generator and test suite (Mac and Windows)
 examples/           fictitious sample files
-build_app.sh        builds the standalone app ;  make_dmg.sh: builds the .dmg
+build_app.sh        Mac: builds the standalone app ;  make_dmg.sh: builds the .dmg
+.github/workflows/  automatic build and tests on Windows
 ```
 
 ## Tests
 
 ```bash
-.deps/python/bin/python3 tests/run_tests.py          # after a first ./build_app.sh
+.deps/python/bin/python3 tests/run_tests.py          # Mac, after a first ./build_app.sh
+.\dist\Anonymiseur\python\python.exe tests\run_tests.py    # Windows, after windows\build_windows.ps1
 ```
 
-The test fails if a test file is missing, so it can never "pass" by testing nothing.
+The test fails if a required test file is missing, so it can never "pass" by testing nothing.
 
 ## Contributing
 
 Reports of badly handled formats and proposals (issues, pull requests) are welcome. Run the tests above before sending a
-change. **Never add real files or personal data** to the repository: use fictitious data.
+change (they also run automatically on Windows). **Never add real files or personal data** to the repository: use
+fictitious data.
 
 ## License
 

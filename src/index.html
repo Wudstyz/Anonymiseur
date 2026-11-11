@@ -110,7 +110,7 @@
 <body>
 <main>
   <h1>Anonymiseur</h1>
-  <p class="sub">Déposez des fichiers ou des dossiers, choisissez les actions voulues, puis cliquez sur « Lancer ». Tout reste sur votre Mac.</p>
+  <p class="sub">Déposez des fichiers ou des dossiers, choisissez les actions voulues, puis cliquez sur « Lancer ». Tout reste sur votre ordinateur.</p>
 
   <div id="drop" tabindex="0">
     <strong>Glissez vos fichiers ou dossiers ici</strong>
@@ -195,7 +195,7 @@
   <div id="bar" hidden><button id="saveall" class="sec" type="button" hidden>Tout enregistrer…</button><button id="report" class="sec" type="button">Exporter le rapport</button><button id="clear" class="sec" type="button">Effacer les résultats</button></div>
   <ul id="list"></ul>
 
-  <footer>Photos (JPEG, PNG, WebP, GIF, TIFF, HEIC, RAW), PDF, Word / Excel / PowerPoint / OpenDocument, draw.io (.drawio, .dio, .drawio.svg, .drawio.png), SVG, ZIP, audio et vidéo. Les fichiers nettoyés sont des copies : l'original n'est jamais modifié (sauf si vous demandez la corbeille). Vous pouvez aussi déposer un fichier sur l'icône de l'app, ou faire clic droit, Ouvrir avec Anonymiseur.</footer>
+  <footer>Photos (JPEG, PNG, WebP, GIF, TIFF, HEIC, RAW), PDF, Word / Excel / PowerPoint / OpenDocument, draw.io (.drawio, .dio, .drawio.svg, .drawio.png), SVG, ZIP, audio et vidéo. Les fichiers nettoyés sont des copies : l'original n'est jamais modifié (sauf si vous demandez la corbeille). <span id="tip">Vous pouvez aussi déposer un fichier sur l'icône de l'app, ou faire clic droit, Ouvrir avec Anonymiseur.</span></footer>
 </main>
 
 <script>
@@ -347,6 +347,7 @@ async function openPaths(paths) {         // flux natif : le moteur lira le fich
   addPending(items);
 }
 window.openPaths = openPaths;
+if (window.WINAPP) $('tip').textContent = 'Vous pouvez aussi faire un clic droit sur un fichier, puis Envoyer vers, puis Anonymiseur.';
 if (window.WINAPP) {                       // app Windows : choix de dossier, et fichiers envoyés depuis l'Explorateur (« Envoyer vers »)
   $('pickrow').hidden = false;
   $('pickfolder').onclick = () => post({ type:'pickfolder' });
