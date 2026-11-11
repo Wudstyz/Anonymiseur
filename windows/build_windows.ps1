@@ -25,7 +25,6 @@ $py     = Get-Verified "https://github.com/astral-sh/python-build-standalone/rel
 $pillow = Get-Verified "https://files.pythonhosted.org/packages/d7/ed/1b16fb66a37e1b9e41370b93b2c614c7da761a5b2a41dc333f7af4639962/pillow-13.0.0-cp313-cp313-win_amd64.whl" "pillow-13.0.0-cp313-cp313-win_amd64.zip" "9dda0788a9932776a75d8bcc020076edc308ce2508b51f6739a45e3158b3fc42"
 $pypdf  = Get-Verified "https://files.pythonhosted.org/packages/d5/a9/ae11deef21eaac5113f8c3848da1c42423b7abeca0abc349bfec7abf4c4e/pypdf-7.0.1-py3-none-any.whl" "pypdf-7.0.1-py3-none-any.zip" "6131b764b046282357037309e7ef2a1b7679d4a5c53eed3db2bfbf7c673ddc2b"
 $pdfium = Get-Verified "https://files.pythonhosted.org/packages/fe/7f/8aa446529fa14523e5c18f89e823afc95526689f76a75efe68a82a10d850/pypdfium2-5.15.2-py3-none-win_amd64.whl" "pypdfium2-5.15.2-py3-none-win_amd64.zip" "74d1bace34fb01c660d0b64344d5a4b7d276942b7c6623c88ab59ea21c5acfbd"
-$heif   = Get-Verified "https://files.pythonhosted.org/packages/37/b5/42eda6f5a7894276592c2b499caad152b057f62b4e1dabab26d808cd0c71/pillow_heif-1.8.1-cp313-cp313-win_amd64.whl" "pillow_heif-1.8.1-cp313-cp313-win_amd64.zip" "f2110c6f9ec02efecf52a979addaf5734770e55ca29705ce0c3f0e588db5e6b5"
 $exif   = Get-Verified "https://downloads.sourceforge.net/project/exiftool/exiftool-13.63_64.zip" "exiftool-13.63_64.zip" "7a4bff4b1d6ee15adef882837847f76c0ed23228d294feed285939b6c9b293bd"
 $null   = Get-Verified "https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz" "ffmpeg-9.0.2.tar.xz" "8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e"
 
@@ -44,7 +43,12 @@ if (Test-Path $out) { Remove-Item -Recurse -Force $out }
 New-Item -ItemType Directory -Force $out | Out-Null
 & tar.exe -xzf $py -C $out            # crée $out\python
 $site = Join-Path $out "python\Lib\site-packages"
-foreach ($w in @($pillow, $pypdf, $pdfium, $heif)) { Expand-Archive -Path $w -DestinationPath $site -Force }
+foreach ($w in @($pillow, $pypdf, $pdfium)) { Expand-Archive -Path $w -DestinationPath $site -Force }
+# Un wheel range parfois ses fichiers dans « <nom>.data\platlib » ; pip les déplace à l'installation, nous le faisons ici.
+Get-ChildItem $site -Directory -Filter "*.data" | ForEach-Object {
+    foreach ($sub in "platlib", "purelib") { $d = Join-Path $_.FullName $sub; if (Test-Path $d) { Copy-Item "$d\*" $site -Recurse -Force } }
+    Remove-Item $_.FullName -Recurse -Force
+}
 foreach ($d in "test", "idlelib", "turtledemo", "ensurepip", "lib2to3") { Remove-Item -Recurse -Force (Join-Path $out "python\Lib\$d") -ErrorAction SilentlyContinue }
 Get-ChildItem $site -Directory -Filter "pip*" | Remove-Item -Recurse -Force
 Remove-Item -Recurse -Force (Join-Path $out "python\Scripts"), (Join-Path $out "python\include") -ErrorAction SilentlyContinue

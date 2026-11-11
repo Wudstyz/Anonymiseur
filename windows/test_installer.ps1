@@ -27,7 +27,11 @@ $app = Start-Process "$dir\python\pythonw.exe" -ArgumentList "`"$dir\launcher.py
 $up = $false
 for ($i = 0; $i -lt 90; $i++) { try { if ((Invoke-WebRequest http://127.0.0.1:48765/ping -UseBasicParsing -TimeoutSec 2).StatusCode -eq 204) { $up = $true; break } } catch {}; Start-Sleep 1 }
 Check $up "le moteur répond sur 127.0.0.1:48765"
-Check (-not [string]::IsNullOrEmpty((Get-Process msedge -ErrorAction SilentlyContinue | Select-Object -First 1))) "une fenêtre Edge est ouverte"
+$edgeUp = $false
+for ($i = 0; $i -lt 40; $i++) { if (Get-Process msedge -ErrorAction SilentlyContinue) { $edgeUp = $true; break }; Start-Sleep 1 }
+Check $edgeUp "une fenêtre Edge est ouverte"
+$logFile = Join-Path $env:LOCALAPPDATA "Anonymiseur\lanceur.log"
+if (-not $edgeUp -and (Test-Path $logFile)) { Write-Host "--- lanceur.log :"; Get-Content $logFile | Select-Object -Last 15 }
 
 if ($up) {
     Write-Host "== Batterie de tests complète, par HTTP, contre l'app installée"
@@ -42,8 +46,9 @@ if ($up) {
     $shot = Join-Path (Get-Location) "dist\capture-windows.png"
     $edge = (Get-Command msedge.exe -ErrorAction SilentlyContinue).Source
     if (-not $edge) { $edge = "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe" }
-    & $edge --headless=new --disable-gpu --hide-scrollbars --window-size=1440,900 --force-device-scale-factor=2 "--screenshot=$shot" http://127.0.0.1:48765/ 2>$null
-    Start-Sleep 3
+    $prof = Join-Path $env:RUNNER_TEMP "edge-capture"
+    $null = Start-Process $edge -ArgumentList "--headless=new", "--disable-gpu", "--hide-scrollbars", "--no-first-run", "--user-data-dir=`"$prof`"", "--window-size=1440,900", "--force-device-scale-factor=2", "--virtual-time-budget=4000", "--screenshot=`"$shot`"", "http://127.0.0.1:48765/" -PassThru -Wait -WindowStyle Hidden
+    for ($i = 0; $i -lt 20 -and -not (Test-Path $shot); $i++) { Start-Sleep 1 }
     Check (Test-Path $shot) "capture d'écran produite"
 }
 

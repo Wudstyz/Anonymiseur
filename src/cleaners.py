@@ -569,7 +569,7 @@ def _heif_to_png(data):
     try:
         import pillow_heif
     except ImportError:
-        raise RuntimeError("Lecture du HEIC impossible : composant pillow-heif absent.")
+        raise RuntimeError("décodeur HEIC absent")
     from PIL import Image
     pillow_heif.register_heif_opener()
     im = Image.open(io.BytesIO(data))
@@ -652,6 +652,10 @@ def clean_bytes(data, filename, depth=0, embedded=False, strong=False, flat=Fals
     if strong and not embedded:
         try:
             res = clean_image_strong(work, filename)
+        except RuntimeError as e:      # décodeur absent (ex. HEIC sous Windows) : on retombe sur le nettoyage standard
+            res = None
+            pre["notes"].append("Mode « Images ré-encodées » indisponible pour ce fichier sur cet ordinateur : "
+                                f"nettoyage standard appliqué ({str(e)[:80]}).")
         except Exception:  # noqa: BLE001
             res = None
         if res:

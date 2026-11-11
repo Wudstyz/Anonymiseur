@@ -20,6 +20,12 @@ jobs:
         shell: pwsh
         run: choco install innosetup ffmpeg -y --no-progress
 
+      - name: Cache des composants (téléchargements vérifiés et FFmpeg compilé)
+        uses: actions/cache@v4
+        with:
+          path: .deps-win
+          key: deps-win-${{ hashFiles('windows/build_windows.ps1', 'windows/build_ffmpeg.sh') }}
+
       - name: Construire l'installateur
         shell: pwsh
         run: ./windows/build_windows.ps1 -Version "1.1"

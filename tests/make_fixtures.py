@@ -63,8 +63,11 @@ if not os.path.exists(P("photo.heic")):                    # sans sips (Windows)
         pillow_heif.register_heif_opener()
         Image.open(P("photo.jpg")).convert("RGB").save(P("photo.heic"), exif=ex.tobytes())
         made.append("photo.heic")
-    except Exception as e:  # noqa: BLE001
-        print("(photo.heic non créé :", e, ")")
+    except Exception:  # noqa: BLE001
+        data = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "photo.heic")   # HEIC fictif fourni avec le dépôt
+        if os.path.exists(data):
+            shutil.copy(data, P("photo.heic"))
+            made.append("photo.heic")
 
 # ── PDF ──────────────────────────────────────────────────────────────────────
 from pypdf import PdfWriter  # noqa: E402
