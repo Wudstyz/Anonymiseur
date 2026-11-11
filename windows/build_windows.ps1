@@ -81,5 +81,5 @@ if (-not (Test-Path $iscc)) { throw "Inno Setup 6 introuvable (choco install inn
 if ($LASTEXITCODE -ne 0) { throw "Inno Setup a échoué" }
 $setup = "dist\Anonymiseur-$Version-x64-setup.exe"
 $hash = (Get-FileHash $setup -Algorithm SHA256).Hash.ToLower()
-"$hash  Anonymiseur-$Version-x64-setup.exe" | Set-Content -Encoding ascii "$setup.sha256"
+[System.IO.File]::WriteAllText((Join-Path (Get-Location).Path "$setup.sha256"), "$hash  Anonymiseur-$Version-x64-setup.exe`n")   # fins de ligne Unix : lisible par « shasum -c » sur Mac et Linux
 Write-Host "OK  $setup ($([math]::Round((Get-Item $setup).Length / 1MB)) Mo)  SHA-256 $hash"
