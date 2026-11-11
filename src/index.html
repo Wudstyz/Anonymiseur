@@ -1,0 +1,565 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Anonymiseur de métadonnées</title>
+<style>
+  :root { color-scheme: light; --bg:#f6f5f2; --card:#fff; --ink:#1c1c1a; --mute:#6b6b66; --line:#e2e0da; --accent:#1f6f50; --warn:#9a5b00; --err:#b3261e; }
+  
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+  main { max-width:720px; margin:0 auto; padding:40px 16px 64px; }
+  h1 { font-size:1.6rem; margin:0 0 4px; }
+  .sub { color:var(--mute); margin:0 0 24px; }
+  #drop { border:2px dashed var(--line); border-radius:14px; background:var(--card); padding:44px 20px; text-align:center; cursor:pointer; transition:.15s; }
+  #drop.over { border-color:var(--accent); background:color-mix(in srgb,var(--accent) 8%,var(--card)); }
+  #drop strong { display:block; font-size:1.1rem; }
+  #drop span { color:var(--mute); font-size:.9rem; }
+  .opts { margin:14px 2px; display:flex; gap:8px; align-items:center; color:var(--mute); font-size:.92rem; }
+  #bar { margin-top:18px; } #clear { background:none; border:1px solid var(--line); color:var(--mute); border-radius:8px; padding:6px 12px; font:inherit; font-size:.85rem; cursor:pointer; } #clear:hover { color:var(--ink); }
+  ul { list-style:none; padding:0; margin:20px 0 0; display:grid; gap:10px; }
+  li { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 16px; }
+  .row { display:flex; justify-content:space-between; gap:12px; align-items:center; }
+  .name { font-weight:600; overflow-wrap:anywhere; }
+  .state { font-size:.88rem; color:var(--mute); white-space:nowrap; }
+  .ok { color:var(--accent); } .err { color:var(--err); }
+  .detail { margin:8px 0 0; padding:0; font-size:.88rem; color:var(--mute); }
+  .detail div { margin-top:2px; }
+  .detail .w { color:var(--warn); }
+  button.dl { background:var(--accent); color:#fff; border:0; border-radius:8px; padding:8px 14px; font:inherit; font-size:.9rem; cursor:pointer; white-space:nowrap; }
+  
+  .summary { display:flex; gap:10px; flex-wrap:wrap; margin:10px 0 2px; }
+  .pill { border-radius:8px; padding:6px 10px; font-size:.9rem; background:color-mix(in srgb,var(--mute) 12%,transparent); }
+  .pill b { font-size:1.05rem; }
+  .pill.before b { color:var(--warn); } .pill.after.zero b { color:var(--accent); } .pill.after.some b { color:var(--err); }
+  .origin { margin:10px 0 2px; padding:10px 12px; border-radius:10px; background:color-mix(in srgb,var(--mute) 9%,transparent); font-size:.88rem; }
+  .origin h4 { margin:0 0 6px; font-size:.82rem; letter-spacing:.04em; text-transform:uppercase; color:var(--mute); }
+  .origin .f { display:flex; gap:8px; margin-top:2px; } .origin .f span:first-child { min-width:130px; color:var(--mute); } .origin .f span:last-child { overflow-wrap:anywhere; }
+  .origin .ai { margin-top:6px; } .origin .ai.hit { color:var(--err); font-weight:600; } .origin .ai li { font-weight:400; margin-left:16px; list-style:disc; }
+  .origin .clear { color:var(--accent); font-weight:600; }
+  details { margin-top:8px; font-size:.88rem; }
+  summary { cursor:pointer; color:var(--mute); }
+  table { width:100%; border-collapse:collapse; margin-top:6px; }
+  td { padding:3px 6px 3px 0; vertical-align:top; border-top:1px solid var(--line); overflow-wrap:anywhere; }
+  td.k { white-space:nowrap; font-weight:600; width:1%; }
+  td.g { color:var(--mute); white-space:nowrap; width:1%; }
+  td.v { color:var(--mute); }
+  tr.gone td.k::before { content:'✓ '; color:var(--accent); }
+  tr.kept td { color:var(--err); } tr.kept td.k::before { content:'⚠ '; }
+  .right { display:flex; gap:10px; align-items:center; flex-shrink:0; }
+  button.sec { background:none; border:1px solid var(--line); color:var(--ink); border-radius:8px; padding:7px 12px; font:inherit; font-size:.88rem; cursor:pointer; white-space:nowrap; }
+  #bar { display:flex; justify-content:flex-end; gap:8px; } #bar[hidden], [hidden] { display:none !important; }
+  .leak { margin-top:6px; } .leak.ok2 { color:var(--accent); font-weight:600; } .leak.bad { color:var(--err); font-weight:600; }
+  footer { margin-top:32px; color:var(--mute); font-size:.85rem; }
+
+  /* ── actions (boutons indépendants) */
+  .panel { margin:16px 0 4px; }
+  .group { margin:0 0 14px; }
+  .group h3 { margin:0 0 4px; font-size:.78rem; letter-spacing:.06em; text-transform:uppercase; color:var(--mute); font-weight:700; }
+  .group .hint { margin:0 0 8px; color:var(--mute); font-size:.85rem; }
+  .togs { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:8px; }
+  button.tog { display:flex; flex-direction:column; justify-content:flex-start; text-align:left; background:var(--card); color:var(--ink); border:1.5px solid var(--line); border-radius:12px; padding:10px 12px 10px 38px; font:inherit; cursor:pointer; position:relative; transition:.12s; }
+  button.tog::before { content:''; position:absolute; left:12px; top:13px; width:16px; height:16px; border-radius:5px; border:1.5px solid var(--line); background:var(--bg); }
+  button.tog[aria-pressed=true] { border-color:var(--accent); background:color-mix(in srgb,var(--accent) 9%,var(--card)); }
+  button.tog[aria-pressed=true]::before { background:var(--accent); border-color:var(--accent); }
+  button.tog[aria-pressed=true]::after { content:'✓'; position:absolute; left:15.5px; top:9px; font-size:.8rem; font-weight:800; color:#fff; }
+  
+  button.tog .t { display:block; font-weight:600; font-size:.93rem; }
+  button.tog .d { display:block; color:var(--mute); font-size:.8rem; margin-top:1px; }
+  button.tog:disabled { opacity:.45; cursor:not-allowed; }
+  .sub2 { margin:8px 0 0; padding:10px 12px; border-radius:12px; border:1px dashed var(--line); }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; }
+  button.chip { background:var(--card); color:var(--mute); border:1.5px solid var(--line); border-radius:999px; padding:4px 11px; font:inherit; font-size:.82rem; cursor:pointer; }
+  button.chip[aria-pressed=true] { color:var(--ink); border-color:var(--accent); background:color-mix(in srgb,var(--accent) 10%,var(--card)); }
+  .sub2 input[type=text] { width:100%; border:1px solid var(--line); border-radius:8px; padding:7px 10px; font:inherit; font-size:.9rem; background:var(--card); color:var(--ink); }
+  .sub2 label { display:block; font-size:.8rem; color:var(--mute); margin-bottom:4px; }
+  .remember { color:var(--mute); font-size:.8rem; margin:0 0 6px; }
+  .bar2 { height:5px; background:color-mix(in srgb,var(--mute) 18%,transparent); border-radius:3px; overflow:hidden; margin-top:8px; }
+  .bar2 > i { display:block; height:100%; width:0; background:var(--accent); transition:width .3s; }
+  .stage { font-size:.8rem; color:var(--mute); margin-top:3px; }
+  .content { margin:8px 0 2px; padding:10px 12px; border-radius:10px; background:color-mix(in srgb,var(--mute) 9%,transparent); font-size:.88rem; }
+  .content h4 { margin:0 0 6px; font-size:.82rem; letter-spacing:.04em; text-transform:uppercase; color:var(--mute); }
+  .content .good { color:var(--accent); font-weight:600; } .content .bad { color:var(--err); font-weight:600; } .content .mute { color:var(--mute); }
+  .actions2 { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+  .form { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:8px 10px; }
+  .form label { margin:0; } .form input { margin-top:3px; }
+  .sub2 input[type=datetime-local] { width:100%; border:1px solid var(--line); border-radius:8px; padding:7px 10px; font:inherit; font-size:.9rem; background:var(--card); color:var(--ink); }
+  .sub2 p.note { margin:8px 0 0; color:var(--mute); font-size:.8rem; }
+  .pill.mine b { color:var(--accent); }
+  .state.partial { color:var(--warn); font-weight:600; } .state.none { color:var(--mute); }
+  /* ── file d'attente + bouton Lancer */
+  #queue { margin:14px 0 4px; }
+  #queue .qhead { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+  #queue h3 { margin:0; font-size:.78rem; letter-spacing:.06em; text-transform:uppercase; color:var(--mute); font-weight:700; }
+  #qlist { margin:0; gap:6px; }
+  #qlist li { padding:8px 12px; display:flex; align-items:center; gap:10px; }
+  #qlist .qn { font-weight:600; overflow-wrap:anywhere; flex:1; } #qlist .qm { color:var(--mute); font-size:.82rem; white-space:nowrap; }
+  #qlist button { background:none; border:0; color:var(--mute); font-size:1.05rem; cursor:pointer; padding:2px 6px; border-radius:6px; } #qlist button:hover { color:var(--err); }
+  #launchbar { position:sticky; bottom:0; z-index:5; display:flex; align-items:center; gap:14px; margin:14px -16px 0; padding:12px 16px; background:color-mix(in srgb,var(--bg) 92%,transparent); backdrop-filter:blur(8px); border-top:1px solid var(--line); }
+  #launchbar .info { flex:1; font-size:.88rem; color:var(--mute); } #launchbar .info b { color:var(--ink); }
+  button.big { font-size:1rem; padding:11px 22px; font-weight:700; }
+  button.big:disabled { opacity:.5; cursor:wait; }
+  .step { display:inline-block; min-width:1.5em; text-align:center; border-radius:999px; background:var(--accent); color:#fff; font-size:.72rem; font-weight:800; margin-right:6px; padding:1px 0; }
+  table.files td.n { text-align:right; white-space:nowrap; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Anonymiseur</h1>
+  <p class="sub">Déposez des fichiers ou des dossiers, choisissez les actions voulues, puis cliquez sur « Lancer ». Tout reste sur votre Mac.</p>
+
+  <div id="drop" tabindex="0">
+    <strong>Glissez vos fichiers ou dossiers ici</strong>
+    <span>ou cliquez pour les choisir</span>
+    <input id="pick" type="file" multiple hidden>
+  </div>
+
+  <div id="queue" hidden>
+    <div class="qhead"><h3><span class="step">1</span>Prêts à traiter <span id="qcount"></span></h3><button id="qclear" class="sec" type="button">Tout retirer</button></div>
+    <ul id="qlist"></ul>
+  </div>
+
+  <div class="panel">
+    <p class="remember"><span class="step">2</span>Chaque bouton est une action indépendante : activez seulement ce dont vous avez besoin. Vos choix sont mémorisés.</p>
+
+    <div class="group">
+      <h3>Anonymiser le fichier</h3>
+      <div class="togs">
+        <button class="tog" data-opt="meta" type="button"><span class="t">Effacer les métadonnées</span><span class="d">Dates, GPS, appareil, auteur, logiciel, signatures d'IA</span></button>
+        <button class="tog" data-opt="rename" type="button"><span class="t">Nom de fichier aléatoire</span><span class="d">Remplace le nom par une suite de caractères</span></button>
+        <button class="tog" data-opt="strong" type="button"><span class="t">Images ré-encodées</span><span class="d">JPEG, PNG, WebP, HEIC, TIFF : efface la structure d'origine (légère recompression)</span></button>
+        <button class="tog" data-opt="flat" type="button"><span class="t">PDF aplatis</span><span class="d">Pages redessinées en images, texte non sélectionnable</span></button>
+      </div>
+    </div>
+
+    <div class="group">
+      <h3>Anonymiser le contenu</h3>
+      <div class="togs">
+        <button class="tog" data-opt="content" type="button"><span class="t">Masquer les informations personnelles</span><span class="d">Dans le texte des PDF, Word, Excel, PowerPoint et fichiers texte</span></button>
+      </div>
+      <div class="sub2" id="contentOpts" hidden>
+        <div class="chips">
+          <button class="chip" data-cat="email" type="button">E-mails</button>
+          <button class="chip" data-cat="phone" type="button">Téléphones</button>
+          <button class="chip" data-cat="bank" type="button">IBAN, cartes, n° de sécu</button>
+          <button class="chip" data-cat="path" type="button">Chemins disque</button>
+          <button class="chip" data-cat="ip" type="button">Adresses IP</button>
+          <button class="chip" data-cat="names" type="button">Noms des auteurs</button>
+        </div>
+        <label for="terms">Autres mots ou noms à masquer (séparés par des virgules)</label>
+        <input id="terms" type="text" placeholder="ex. Dupont, Projet Orion, 12 rue des Lilas" autocomplete="off" spellcheck="false">
+      </div>
+    </div>
+
+    <div class="group">
+      <h3>Modifier les métadonnées</h3>
+      <div class="togs">
+        <button class="tog" data-opt="setmeta" type="button"><span class="t">Définir mes propres métadonnées</span><span class="d">Écrit vos valeurs à la place des originales (champ vide : non écrit)</span></button>
+      </div>
+      <div class="sub2" id="metaForm" hidden>
+        <div class="form">
+          <label>Auteur<input type="text" data-mf="author" autocomplete="off"></label>
+          <label>Titre<input type="text" data-mf="title" autocomplete="off"></label>
+          <label>Description<input type="text" data-mf="description" autocomplete="off"></label>
+          <label>Copyright<input type="text" data-mf="copyright" autocomplete="off"></label>
+          <label>Logiciel<input type="text" data-mf="software" autocomplete="off"></label>
+          <label>Date de création<input type="datetime-local" data-mf="created"></label>
+          <label>Marque de l'appareil<input type="text" data-mf="make" autocomplete="off"></label>
+          <label>Modèle de l'appareil<input type="text" data-mf="model" autocomplete="off"></label>
+          <label>Latitude (ex. 48.8584)<input type="text" data-mf="lat" inputmode="decimal" autocomplete="off"></label>
+          <label>Longitude (ex. 2.2945)<input type="text" data-mf="lon" inputmode="decimal" autocomplete="off"></label>
+        </div>
+        <p class="note">Appliqué après l'effacement : le fichier ne contient alors que ces valeurs. Selon le format, certains champs sont ignorés (un PDF n'a ni appareil ni GPS, une vidéo ni marque ni modèle) ; l'app l'indique.</p>
+      </div>
+    </div>
+
+    <div class="group">
+      <h3>Enregistrement</h3>
+      <div class="togs">
+        <button class="tog" data-opt="neutral" type="button"><span class="t">Date du fichier neutre</span><span class="d">Création et modification au 1er janvier 2000</span></button>
+        <button class="tog" data-opt="beside" type="button" data-native><span class="t">À côté de l'original</span><span class="d">Enregistre sans demander, nom « … (anonymisé) »</span></button>
+        <button class="tog" data-opt="trash" type="button" data-native><span class="t">Original à la corbeille</span><span class="d">Après vérification, avec confirmation. Active « À côté de l'original »</span></button>
+      </div>
+    </div>
+  </div>
+
+  <div id="launchbar" hidden><span class="info" id="launchinfo"></span><button id="launch" class="dl big" type="button">Lancer l'anonymisation</button></div>
+
+  <div id="bar" hidden><button id="saveall" class="sec" type="button" hidden>Tout enregistrer…</button><button id="report" class="sec" type="button">Exporter le rapport</button><button id="clear" class="sec" type="button">Effacer les résultats</button></div>
+  <ul id="list"></ul>
+
+  <footer>Photos (JPEG, PNG, WebP, GIF, TIFF, HEIC, RAW), PDF, Word / Excel / PowerPoint / OpenDocument, draw.io (.drawio, .dio, .drawio.svg, .drawio.png), SVG, ZIP, audio et vidéo. Les fichiers nettoyés sont des copies : l'original n'est jamais modifié (sauf si vous demandez la corbeille). Vous pouvez aussi déposer un fichier sur l'icône de l'app, ou faire clic droit, Ouvrir avec Anonymiseur.</footer>
+</main>
+
+<script>
+const NATIVE = !!(window.NATIVE && window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.native);
+const post = m => window.webkit.messageHandlers.native.postMessage(m);
+const $ = id => document.getElementById(id);
+const drop = $('drop'), pick = $('pick'), list = $('list'), bar = $('bar'), saveall = $('saveall');
+const fmt = n => n > 1048576 ? (n/1048576).toFixed(1)+' Mo' : Math.max(1,Math.round(n/1024))+' Ko';
+let held = [];       // résultats gardés par le moteur (téléchargement individuel ou « Tout enregistrer »)
+let reports = [];    // un rapport par fichier traité (pour l'export)
+let trashCandidates = [];
+
+/* ── réglages : boutons indépendants, mémorisés */
+const DEFAULTS = { setmeta:false, meta:true, rename:true, strong:false, flat:false, content:false, neutral:false, beside:false, trash:false };
+const CATS = ['email', 'phone', 'bank', 'path', 'ip', 'names'];
+const state = { ...DEFAULTS, cats: [...CATS], terms: '', mf: {} };
+try { Object.assign(state, JSON.parse(localStorage.getItem('anonymiseur_v2') || '{}')); } catch (e) {}
+const save = () => { try { localStorage.setItem('anonymiseur_v2', JSON.stringify(state)); } catch (e) {} if (NATIVE) post({ type:'options', neutral: state.neutral }); };
+
+function paint() {
+  document.querySelectorAll('button.tog').forEach(b => {
+    if (b.dataset.native !== undefined && !NATIVE) b.hidden = true;
+    b.setAttribute('aria-pressed', state[b.dataset.opt] ? 'true' : 'false');
+  });
+  document.querySelectorAll('button.chip').forEach(b => b.setAttribute('aria-pressed', state.cats.includes(b.dataset.cat) ? 'true' : 'false'));
+  $('contentOpts').hidden = !state.content;
+  $('metaForm').hidden = !state.setmeta;
+  $('terms').value = state.terms;
+  document.querySelectorAll('[data-mf]').forEach(i => i.value = (state.mf || {})[i.dataset.mf] || '');
+}
+document.querySelectorAll('button.tog').forEach(b => b.onclick = () => {
+  const k = b.dataset.opt; state[k] = !state[k];
+  if (k === 'trash' && state.trash) state.beside = true;     // la corbeille exige une copie enregistrée à côté
+  if (k === 'beside' && !state.beside) state.trash = false;
+  save(); paint();
+});
+document.querySelectorAll('button.chip').forEach(b => b.onclick = () => {
+  const c = b.dataset.cat; state.cats = state.cats.includes(c) ? state.cats.filter(x => x !== c) : [...state.cats, c]; save(); paint();
+});
+$('terms').oninput = e => { state.terms = e.target.value; save(); };
+document.querySelectorAll('[data-mf]').forEach(i => i.oninput = () => { state.mf = { ...(state.mf || {}), [i.dataset.mf]: i.value }; save(); });
+const hasMF = () => Object.values(state.mf || {}).some(v => String(v).trim());
+paint(); save();
+
+const options = (over = {}) => {
+  const o = { ...state, ...over };
+  const terms = (over.terms ?? state.terms).split(',').map(x => x.trim()).filter(Boolean);
+  return { meta: o.meta, rename: o.rename, strong: o.strong, flat: o.flat, neutral: o.neutral, beside: NATIVE && o.beside,
+           content: { on: o.content, cats: o.cats, terms },
+           setmeta: { on: o.setmeta, ...(state.mf || {}) }, job: Math.random().toString(36).slice(2) };
+};
+const optHeader = o => encodeURIComponent(JSON.stringify(o));
+
+/* ── dépôt de fichiers */
+drop.onclick = () => NATIVE ? post({type:'pick'}) : pick.click();
+drop.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') drop.onclick(); };
+pick.onchange = () => { handle(pick.files); pick.value = ''; };
+['dragenter','dragover'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave','drop'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', e => handle(e.dataTransfer.files));
+window.addEventListener('dragover', e => e.preventDefault());
+window.addEventListener('drop', e => e.preventDefault());
+setInterval(() => fetch('/ping').catch(() => {}), 5000); fetch('/ping').catch(() => {});
+
+function el(tag, cls, text) { const x = document.createElement(tag); if (cls) x.className = cls; if (text) x.textContent = text; return x; }
+
+function clearResults() {
+  list.replaceChildren(); bar.hidden = true; saveall.hidden = true; held = []; reports = []; trashCandidates = [];
+  return NATIVE ? fetch('/forget', { method:'POST', headers:{ 'X-Token': window.TOKEN } }).catch(() => {}) : Promise.resolve();
+}
+$('clear').onclick = clearResults;
+saveall.onclick = () => post({ type:'saveAll', items: held });
+window.nativeSaved = n => flash(saveall, n + ' fichier(s) enregistré(s) ✓');
+window.nativeTrashed = n => flash($('clear'), n + ' original(aux) à la corbeille ✓');
+function flash(btn, msg) { const t = btn.textContent; btn.textContent = msg; setTimeout(() => btn.textContent = t, 3500); }
+async function prepare() { await clearResults(); bar.hidden = false; setTimeout(() => bar.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }
+
+/* ── file d'attente : on dépose, on choisit les actions, puis on clique sur « Lancer » */
+let pending = [];       // {kind:'file', file, name, size} ou {kind:'path', path, name, size, dir, count}
+let ranBatch = false;   // un lot vient d'être traité : le prochain dépôt repart d'un écran propre
+
+const sizeOf = n => n == null ? '' : fmt(n);
+function activeSummary() {
+  const a = [];
+  if (state.meta) a.push('effacer les métadonnées');
+  if (state.setmeta) a.push('définir vos métadonnées');
+  if (state.rename) a.push('nom aléatoire');
+  if (state.strong) a.push('images ré-encodées');
+  if (state.flat) a.push('PDF aplatis');
+  if (state.content) a.push('masquer le contenu');
+  if (state.neutral) a.push('date neutre');
+  if (NATIVE && state.beside) a.push('à côté de l\'original');
+  if (NATIVE && state.trash) a.push('original à la corbeille');
+  return a.length ? a.join(' · ') : 'aucune action sélectionnée';
+}
+function renderQueue() {
+  const q = $('queue'), ul = $('qlist'); ul.replaceChildren();
+  q.hidden = $('launchbar').hidden = pending.length === 0;
+  $('qcount').textContent = pending.length ? '(' + pending.length + ')' : '';
+  pending.forEach((it, i) => {
+    const li = el('li'); const n = el('span', 'qn', it.name);
+    const m = el('span', 'qm', it.dir ? 'dossier' + (it.count != null ? ' · ' + plural(it.count, 'fichier') : '') : sizeOf(it.size));
+    const x = el('button', '', '✕'); x.title = 'Retirer'; x.onclick = () => { pending.splice(i, 1); renderQueue(); };
+    li.append(n, m, x); ul.append(li);
+  });
+  const info = $('launchinfo'); info.replaceChildren();
+  info.append(el('b', '', plural(pending.length, 'élément') + ' prêt' + (pending.length > 1 ? 's' : '')), document.createTextNode(' — ' + activeSummary()));
+}
+function addPending(items) {
+  if (ranBatch) { clearResults(); ranBatch = false; }
+  for (const it of items) {
+    if (pending.some(p => (it.path && p.path === it.path) || (it.file && p.file && p.name === it.name && p.size === it.size))) continue;
+    pending.push(it);
+  }
+  renderQueue();
+  if (pending.length) $('queue').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+$('qclear').onclick = () => { pending = []; renderQueue(); };
+document.querySelectorAll('button.tog, button.chip').forEach(b => b.addEventListener('click', renderQueue));
+document.querySelectorAll('[data-mf], #terms').forEach(i => i.addEventListener('input', () => {}));
+
+async function handle(files) {            // flux navigateur : on garde le fichier en attente
+  addPending(Array.from(files).map(f => ({ kind:'file', file:f, name:f.name, size:f.size })));
+}
+async function openPaths(paths) {         // flux natif : le moteur lira le fichier ou le dossier sur le disque
+  if (!paths || !paths.length) return;
+  const items = [];
+  for (const p of paths) {
+    let info = {};
+    try { const r = await fetch('/stat', { method:'POST', headers:{ 'X-Token': window.TOKEN, 'X-Path': encodeURIComponent(p) } }); if (r.ok) info = await r.json(); } catch (e) {}
+    items.push({ kind:'path', path:p, name: info.name || p.split('/').pop(), size: info.size, dir: !!info.dir, count: info.count });
+  }
+  addPending(items);
+}
+window.openPaths = openPaths;
+
+async function launch() {
+  if (!pending.length) return;
+  const batch = pending; pending = []; renderQueue(); ranBatch = true;
+  const btn = $('launch'); btn.disabled = true;
+  await prepare();
+  try {
+    for (const it of batch) {
+      if (it.kind === 'file') await runOne(it.name, () => async (o) => {
+        const res = await fetch('/clean', { method:'POST', body:it.file, headers:{ 'X-Filename': encodeURIComponent(it.name), 'X-Options': optHeader(o) } });
+        return { rep: JSON.parse(decodeURIComponent(res.headers.get('X-Report'))), ok: res.ok, blob: await res.blob() };
+      });
+      else await runOne(it.name, () => async (o) => {
+        const res = await fetch('/clean-path', { method:'POST', headers:{ 'X-Token': window.TOKEN, 'X-Path': encodeURIComponent(it.path), 'X-Options': optHeader(o) } });
+        return { rep: JSON.parse(decodeURIComponent(res.headers.get('X-Report'))), ok: res.ok, blob: null, src: it.path };
+      });
+    }
+    if (batch.some(i => i.kind === 'path')) proposeTrash();
+  } finally { btn.disabled = false; }
+}
+$('launch').onclick = launch;
+
+function proposeTrash() {
+  if (NATIVE && state.trash && trashCandidates.length) post({ type:'trash', items: trashCandidates });
+}
+
+async function runOne(label, factory, over = {}, li = null) {
+  const first = !li;
+  li = li || el('li'); li.replaceChildren();
+  const row = el('div', 'row'), name = el('span', 'name', label), right = el('div', 'right'), st = el('span', 'state', 'Traitement…');
+  const prog = el('div', 'bar2'), fill = el('i'), stage = el('div', 'stage');
+  prog.append(fill); right.append(st); row.append(name, right); li.append(row, prog, stage);
+  if (first) list.append(li);
+  const o = options(over), send = factory(over);
+  let timer = setInterval(async () => {
+    try { const j = await (await fetch('/progress?job=' + o.job)).json(); if (j.pct != null) { fill.style.width = j.pct + '%'; stage.textContent = j.stage || ''; } } catch (e) {}
+  }, 400);
+  try {
+    const r = await send(o);
+    clearInterval(timer); prog.remove(); stage.remove();
+    const rerun = extra => runOne(label, factory, { ...over, ...extra }, li);
+    r.rep.folder ? renderFolder(li, name, right, st, label, r) : render(li, name, right, st, label, r, rerun);
+    const entry = { label, rep: r.rep, ok: r.ok };
+    if (li._report && reports.includes(li._report)) reports[reports.indexOf(li._report)] = entry; else reports.push(entry);
+    li._report = entry;
+  } catch (e) { clearInterval(timer); prog.remove(); stage.remove(); st.textContent = 'Erreur'; st.classList.add('err'); }
+}
+
+/* ── affichage d'un résultat */
+const plural = (n, w) => n + ' ' + w + (n > 1 ? 's' : '');
+function contentBox(rep, rerun) {
+  const C = rep.content; if (!C) return null;
+  const box = el('div', 'content'); box.append(el('h4', '', 'Contenu'));
+  const red = Object.entries(C.redacted || {}), left = C.findings || [];
+  if (!C.supported && !red.length) { box.append(el('div', 'mute', 'Texte non analysé pour ce type de fichier (aucune reconnaissance de texte dans les images ou vidéos).')); return box; }
+  if (red.length) box.append(el('div', 'good', '✓ Masqué : ' + red.map(([k, n]) => n + ' × ' + k).join(', ') + (C.flattened ? ' (PDF redessiné en images)' : '')));
+  else if (state.content && C.supported) box.append(el('div', 'mute', 'Rien à masquer dans le texte avec les catégories choisies.'));
+  if (left.length) {
+    const d = el('div', 'bad', (red.length ? '⚠ Encore présent dans le texte : ' : '⚠ Repéré dans le texte (non modifié) : ') + left.map(f => f.count + ' × ' + f.kind + ' (' + f.examples.slice(0, 2).join(', ') + ')').join(' ; '));
+    box.append(d);
+  } else if (C.supported && !red.length && !state.content) box.append(el('div', 'good', '✓ Aucun e-mail, téléphone, IBAN, chemin ni IP repéré dans le texte.'));
+  (C.names || []).forEach(n => box.append(el('div', 'bad', '⚠ Le nom « ' + n.name + ' » apparaît ' + n.count + ' fois dans le texte.')));
+  if (C.supported && (left.length || (C.names || []).length) && !state.content) {
+    const a = el('div', 'actions2'), b = el('button', 'sec', 'Masquer ces éléments'); b.onclick = () => rerun({ content: true }); a.append(b); box.append(a);
+  }
+  return box;
+}
+
+function render(li, name, right, state_, label, { rep, ok, blob, src }, rerun) {
+  const det = el('div', 'detail');
+  if (!ok) {
+    state_.textContent = 'Échec'; state_.classList.add('err'); det.append(el('div', 'err', rep.error || 'Erreur inconnue'));
+  } else {
+    const unsupported = rep.unsupported;
+    state_.textContent = unsupported ? 'Non géré' : (rep.passthrough ? 'Sans métadonnées' : 'Terminé'); state_.classList.add(unsupported ? 'err' : (rep.passthrough ? 'none' : 'ok'));
+    if (!unsupported && !rep.passthrough && !rep.meta_kept && rep.after && rep.after.items.length) {
+      state_.textContent = 'Incomplet'; state_.classList.remove('ok'); state_.classList.add('partial');
+      det.append(el('div', 'w', '⚠ Ce format ne permet pas d\'effacer automatiquement ' + plural(rep.after.items.length, 'champ') + ' : ils sont conservés (liste ci-dessous).'));
+    }
+    if (!unsupported) {
+      name.textContent = label + ' → ' + (rep.saved_path ? rep.saved_path.split('/').pop() : rep.name) + '  (' + fmt(rep.size_before) + ' → ' + fmt(rep.size_after) + ')';
+      if (rep.saved_path) {
+        state_.textContent = 'Enregistré ✓';
+        const b = el('button', 'sec', 'Afficher'); b.onclick = () => post({ type:'reveal', path: rep.saved_path }); right.append(b);
+      } else {
+        const b = el('button', 'dl', 'Télécharger');
+        if (blob) b.onclick = () => { const u = URL.createObjectURL(blob), l = document.createElement('a'); l.href = u; l.download = rep.name; l.click(); setTimeout(() => URL.revokeObjectURL(u), 5000); };
+        else if (rep.id) { b.onclick = () => { location.href = '/result?id=' + rep.id + '&token=' + encodeURIComponent(window.TOKEN); };
+          held.push({ id: rep.id, name: rep.name }); saveall.hidden = !NATIVE; }
+        right.append(b);
+      }
+    }
+    const B = rep.before, A = rep.after;
+    if (!unsupported && B && A) {
+      const sig = m => m.group + '|' + m.tag + '|' + m.value;
+      const still = new Set(A.items.map(sig));
+      const OB = rep.origin_before, OA = rep.origin_after;
+      if (rep.meta_kept) det.append(el('div', 'w', '⚠ Métadonnées conservées (le bouton « Effacer les métadonnées » est désactivé).'));
+      else if (OB) {
+        const o = el('div', 'origin'); o.append(el('h4', '', 'Origine détectée avant nettoyage'));
+        if (!OB.fields.length) o.append(el('div', '', 'Aucune information sur l\'appareil, le logiciel ou l\'auteur.'));
+        OB.fields.forEach(f => { const r = el('div', 'f'); r.append(el('span', '', f.label), el('span', '', f.value)); o.append(r); });
+        const ai = el('div', 'ai' + (OB.ai.length ? ' hit' : ''));
+        if (OB.ai.length) { ai.append(el('div', '', '⚠ Indices d\'utilisation d\'une IA :')); const ul = el('ul'); OB.ai.forEach(x => ul.append(el('li', '', x))); ai.append(ul); }
+        else ai.textContent = 'IA : aucun indice dans les métadonnées (cela n\'exclut pas un filigrane invisible dans l\'image).';
+        o.append(ai);
+        const left = OA ? OA.fields.length + OA.ai.length : 0;
+        const after = el('div', left ? 'ai hit' : 'clear'); after.style.marginTop = '8px';
+        after.textContent = left ? '⚠ Après nettoyage, il reste : ' + OA.fields.map(f => f.label).concat(OA.ai).join(', ') : '✓ Après nettoyage : plus aucune information sur l\'origine, l\'appareil, l\'auteur ou l\'IA.';
+        o.append(after);
+        const L = rep.leak;
+        if (L) {
+          const lk = el('div', 'leak ' + (L.found.length ? 'bad' : 'ok2'));
+          lk.textContent = L.found.length
+            ? '⚠ Contrôle de fuite : retrouvé dans le fichier final : ' + L.found.map(x => '« ' + x.value + ' » (' + x.tag + ')').join(', ')
+            : (L.checked ? '✓ Contrôle de fuite : ' + L.checked + ' valeur(s) identifiante(s) recherchée(s) dans le fichier final, aucune retrouvée.' : '✓ Contrôle de fuite : aucune valeur identifiante à rechercher.');
+          o.append(lk);
+        }
+        det.append(o);
+      }
+      const cb = contentBox(rep, rerun); if (cb) det.append(cb);
+      if (!rep.meta_kept) {
+        const sum = el('div', 'summary');
+        const pb = el('div', 'pill before'); pb.innerHTML = 'Avant : <b></b> métadonnée(s) identifiante(s)'; pb.querySelector('b').textContent = B.items.length;
+        const pa = el('div', 'pill after ' + (A.items.length ? 'some' : 'zero')); pa.innerHTML = 'Après : <b></b>'; pa.querySelector('b').textContent = A.items.length;
+        sum.append(pb, pa);
+        if ((rep.set_items || []).length) { const pm = el('div', 'pill mine'); pm.innerHTML = '+ <b></b> définie(s) par vous'; pm.querySelector('b').textContent = rep.set_items.length; sum.append(pm); }
+        det.append(sum);
+      }
+      if (B.items.length) {
+        const d = el('details'); d.open = false; d.append(el('summary', '', 'Voir les métadonnées trouvées avant nettoyage'));
+        const t = el('table');
+        B.items.forEach(m => { const tr = el('tr', still.has(sig(m)) ? 'kept' : 'gone'); tr.append(el('td', 'k', m.tag), el('td', 'g', m.group), el('td', 'v', m.value)); t.append(tr); });
+        d.append(t); det.append(d);
+      }
+      if (A.technical) det.append(el('div', '', A.technical + ' donnée(s) technique(s) conservée(s) (dimensions, codec, couleurs…) : elles ne permettent pas de situer ni d\'identifier.'));
+      if ((rep.set_items || []).length) {
+        const d = el('details'); d.open = rep.set_items.length <= 6;
+        d.append(el('summary', '', 'Métadonnées définies par vous (' + rep.set_items.length + ')'));
+        const t = el('table'); rep.set_items.forEach(m => { const tr = el('tr', 'gone'); tr.append(el('td', 'k', m.tag), el('td', 'g', m.group), el('td', 'v', m.value)); t.append(tr); });
+        d.append(t); det.append(d);
+      }
+      if (!state.setmeta && hasMF() && !rep.set_items.length) { const a = el('div', 'actions2'), b = el('button', 'sec', 'Appliquer mes métadonnées'); b.onclick = () => rerun({ setmeta: true }); a.append(b); det.append(a); }
+      if (rep.meta_kept) { const a = el('div', 'actions2'), b = el('button', 'sec', 'Effacer aussi les métadonnées'); b.onclick = () => rerun({ meta: true }); a.append(b); det.append(a); }
+    } else if (!unsupported) {
+      (rep.removed || []).forEach(r => det.append(el('div', '', '✓ ' + r)));
+    } else {
+      const cb = contentBox(rep, rerun); if (cb) det.append(cb);
+    }
+    (rep.notes || []).forEach(n => det.append(el('div', 'w', '⚠ ' + n)));
+    if (!unsupported && B && A && (rep.removed || []).length) {
+      const d = el('details'); d.append(el('summary', '', 'Opérations effectuées (' + rep.removed.length + ')'));
+      rep.removed.forEach(r => d.append(el('div', '', '✓ ' + r))); det.append(d);
+    }
+    // candidats pour la corbeille : copie enregistrée + vérifications propres
+    if (src && rep.saved_path && !unsupported) {
+      const clean = (rep.meta_kept || (A && A.items.length === 0 && !(rep.leak && rep.leak.found.length))) && !(rep.content && (rep.content.findings || []).length && state.content);
+      if (clean) trashCandidates.push({ src, copy: rep.saved_path });
+      else if (state.trash) det.append(el('div', 'w', '⚠ Original conservé : la vérification n\'est pas entièrement propre.'));
+    }
+  }
+  li.append(det);
+}
+
+function renderFolder(li, name, right, st, label, { rep, ok, src }) {
+  const det = el('div', 'detail');
+  if (!ok) { st.textContent = 'Échec'; st.classList.add('err'); det.append(el('div', 'err', rep.error || 'Erreur inconnue')); li.append(det); return; }
+  const T = rep.totals;
+  st.textContent = 'Enregistré ✓'; st.classList.add('ok');
+  name.textContent = label + ' → ' + rep.name + '  (' + plural(T.ok, 'fichier') + ')';
+  const b = el('button', 'sec', 'Afficher'); b.onclick = () => post({ type:'reveal', path: rep.saved_path }); right.append(b);
+  const sum = el('div', 'summary');
+  const p1 = el('div', 'pill'); p1.innerHTML = '<b></b> fichier(s) traité(s)'; p1.querySelector('b').textContent = T.ok;
+  const pb = el('div', 'pill before'); pb.innerHTML = 'Avant : <b></b> métadonnée(s)'; pb.querySelector('b').textContent = T.before;
+  const pa = el('div', 'pill after ' + (T.after ? 'some' : 'zero')); pa.innerHTML = 'Après : <b></b>'; pa.querySelector('b').textContent = T.after;
+  sum.append(p1, pb, pa);
+  if (T.leaks) { const pl = el('div', 'pill after some'); pl.innerHTML = '<b></b> fuite(s)'; pl.querySelector('b').textContent = T.leaks; sum.append(pl); }
+  det.append(sum);
+  if (T.passthrough) det.append(el('div', '', plural(T.passthrough, 'fichier') + ' sans métadonnées personnelles (code, texte, polices…) copié(s) tel(s) quel(s).'));
+  if (T.partial) det.append(el('div', 'w', '⚠ ' + plural(T.partial, 'fichier') + ' avec des champs que ce format ne permet pas d\'effacer.'));
+  if (T.findings) det.append(el('div', 'w', '⚠ ' + plural(T.findings, 'élément') + ' personnel(s) encore repéré(s) dans le texte des fichiers (non masqués).'));
+  const d = el('details'); d.append(el('summary', '', 'Détail fichier par fichier (' + rep.files.length + ')'));
+  const t = el('table', 'files');
+  rep.files.forEach(f => {
+    const tr = el('tr', f.status === 'ok' && !f.after && !f.leak ? 'gone' : (f.status === 'ok' ? 'kept' : 'kept'));
+    const info = f.status === 'ok' && f.passthrough ? 'sans métadonnées (copié tel quel)' : f.status === 'ok' ? (f.before + ' → ' + f.after + (f.leak ? ' · fuite' : '') + (f.removed ? ' · ' + f.removed + ' masqué(s)' : '') + (f.findings ? ' · ' + f.findings + ' repéré(s)' : '')) : (f.status === 'skipped' ? 'non copié : ' + f.reason : 'erreur : ' + f.reason);
+    tr.append(el('td', 'k', f.path), el('td', 'v', info)); t.append(tr);
+  });
+  d.append(t); det.append(d);
+  (rep.notes || []).forEach(n => det.append(el('div', 'w', '⚠ ' + n)));
+  if (src && state.trash) {
+    const clean = T.skipped === 0 && T.after === 0 && T.leaks === 0 && !T.findings;
+    if (clean) trashCandidates.push({ src, copy: rep.saved_path });
+    else det.append(el('div', 'w', '⚠ Dossier d\'origine conservé : tous les fichiers ne sont pas traités ou vérifiés proprement.'));
+  }
+  li.append(det);
+}
+
+/* ── rapport (sans les valeurs trouvées : seulement ce qui a été détecté et fait) */
+function buildReport() {
+  const L = ['RAPPORT D\'ANONYMISATION', new Date().toLocaleString('fr-FR'), '',
+    'Ce rapport décrit ce qui a été trouvé et fait, sans reproduire les valeurs (noms, coordonnées…).', ''];
+  const on = k => state[k] ? 'oui' : 'non';
+  L.push('Réglages : métadonnées effacées ' + on('meta') + ' · métadonnées définies ' + on('setmeta') + ' · nom aléatoire ' + on('rename') + ' · images ré-encodées ' + on('strong') + ' · PDF aplatis ' + on('flat') + ' · contenu masqué ' + on('content') + ' · date neutre ' + on('neutral'), '');
+  reports.forEach(({ label, rep, ok }) => {
+    L.push('── ' + label + (rep.name && rep.name !== label ? ' → ' + rep.name : ''));
+    if (!ok) { L.push('   Échec : ' + (rep.error || 'erreur')); L.push(''); return; }
+    if (rep.folder) {
+      const T = rep.totals; L.push('   Dossier : ' + T.ok + ' fichier(s) traité(s), ' + T.skipped + ' non traité(s)', '   Métadonnées : ' + T.before + ' avant, ' + T.after + ' après · fuites : ' + T.leaks);
+      rep.files.forEach(f => L.push('     - ' + f.path + ' : ' + (f.status === 'ok' ? f.before + ' → ' + f.after : f.status)));
+    } else {
+      if (rep.before && rep.after) L.push('   Métadonnées : ' + rep.before.items.length + ' avant, ' + rep.after.items.length + ' après');
+      if (rep.before && rep.before.items.length) L.push('   Champs trouvés : ' + [...new Set(rep.before.items.map(m => m.tag))].join(', '));
+      if (rep.origin_before && rep.origin_before.fields.length) L.push('   Origine détectée : ' + rep.origin_before.fields.map(f => f.label).join(', '));
+      if (rep.origin_before && rep.origin_before.ai.length) L.push('   Indices d\'IA : ' + rep.origin_before.ai.join(' ; '));
+      if (rep.leak) L.push('   Contrôle de fuite : ' + (rep.leak.found.length ? rep.leak.found.length + ' valeur(s) retrouvée(s)' : rep.leak.checked + ' valeur(s) recherchée(s), aucune retrouvée'));
+      const C = rep.content; if (C) {
+        const red = Object.entries(C.redacted || {}); if (red.length) L.push('   Contenu masqué : ' + red.map(([k, n]) => n + ' × ' + k).join(', '));
+        if ((C.findings || []).length) L.push('   Encore repéré dans le texte : ' + C.findings.map(f => f.count + ' × ' + f.kind).join(', '));
+      }
+      if ((rep.set_items || []).length) L.push('   Métadonnées définies par l\'utilisateur : ' + [...new Set(rep.set_items.map(m => m.tag))].join(', '));
+      (rep.removed || []).forEach(r => L.push('   ✓ ' + r));
+      (rep.notes || []).forEach(n => L.push('   ! ' + n));
+    }
+    L.push('');
+  });
+  return L.join('\n');
+}
+$('report').onclick = () => {
+  if (!reports.length) return;
+  const text = buildReport(), name = 'rapport-anonymisation.txt';
+  if (NATIVE) post({ type:'saveText', name, text });
+  else { const u = URL.createObjectURL(new Blob([text], { type:'text/plain' })), a = document.createElement('a'); a.href = u; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(u), 5000); }
+};
+</script>
+</body>
+</html>

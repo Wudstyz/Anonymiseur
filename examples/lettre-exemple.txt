@@ -1,0 +1,4 @@
+Bonjour,
+Contactez Jean Martin au 06 12 34 56 78 ou +33 6 12 34 56 78, ou par mail à jean.martin@exemple.fr.
+Virement sur FR76 3000 6000 0112 3456 7890 189 (IBAN). Carte 4539 1488 0343 6467. Dossier : /home/jean/Documents/secret.
+Serveur 192.168.1.42. Version 1.2.3.4. Date 12/05/2024. Tel faux: 12345.

@@ -1,0 +1,19 @@
+# Sorties de construction et composants téléchargés
+.deps/
+dist/
+*.dmg
+*.dmg.sha256
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# macOS
+.DS_Store
+._*
+
+# Données de test générées, données utilisateur
+fixtures/
+anonymiseur-tests-*/
