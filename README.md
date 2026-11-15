@@ -204,6 +204,6 @@ réels ou de données personnelles** au dépôt : utilisez des données fictives
 
 ## Licence
 
-[MIT](LICENSE) © 2026 Wudstyz. Les composants embarqués ont leurs propres licences : voir
+[MIT](LICENSE) © 2026 Damien POLLET (Wudstyz). Les composants embarqués ont leurs propres licences : voir
 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md). Les marques citées appartiennent à leurs propriétaires ; ce projet n'est
 affilié à aucune de ces sociétés.

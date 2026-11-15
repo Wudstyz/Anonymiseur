@@ -200,6 +200,6 @@ fictitious data.
 
 ## License
 
-[MIT](LICENSE) © 2026 Wudstyz. Bundled components have their own licenses: see
+[MIT](LICENSE) © 2026 Damien POLLET (Wudstyz). Bundled components have their own licenses: see
 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md). Trademarks mentioned belong to their owners; this project is not
 affiliated with any of these companies.

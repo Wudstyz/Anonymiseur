@@ -11,7 +11,7 @@
 AppId={{B7E3A1C2-5D4F-4E8A-9C3B-2F6A1D8E7B40}
 AppName=Anonymiseur
 AppVersion={#AppVersion}
-AppPublisher=Wudstyz
+AppPublisher=Damien POLLET (Wudstyz)
 AppPublisherURL=https://github.com/Wudstyz/Anonymiseur
 AppSupportURL=https://github.com/Wudstyz/Anonymiseur/issues
 DefaultDirName={autopf}\Anonymiseur
